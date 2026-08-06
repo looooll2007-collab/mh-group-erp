@@ -247,41 +247,29 @@ if 'user_role' not in st.session_state:
     st.session_state['user_role'] = None
 
 def login():
-    st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
-
-    # CSS محدد فقط لزرار التسجيل وبدون ما يلمس أيقونة العين
-    st.markdown("""
-        <style>
-        div[data-testid="stForm"] {
-            border: none !important;
-            padding: 0 !important;
-        }
-        div[data-testid="stFormSubmitButton"] > button {
-            background-color: #d4af37 !important;
-            color: #000000 !important;
-            font-weight: bold !important;
-            border: none !important;
-            width: 100% !important;
-        }
-        div[data-testid="stFormSubmitButton"] > button:hover {
-            background-color: #b89628 !important;
-            color: #ffffff !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    with st.form("login_form"):
-        username = st.text_input("اسم المستخدم")
-        password = st.text_input("كلمة المرور", type="password")
-        login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
-        
-        if login_button:
-            if username == "admin" and password == "123456":
-                st.session_state["logged_in"] = True
+    st.markdown("<h1 style='text-align: center; color: #ffd700;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        username_input = st.text_input("اسم المستخدم")
+        password_input = st.text_input("كلمة المرور", type="password")
+        if st.button("تسجيل الدخول", use_container_width=True):
+            conn = sqlite3.connect("mh_group_erp.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, role FROM users WHERE username = ? AND password = ?", (username_input, password_input))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if user:
+                st.session_state['logged_in'] = True
+                st.session_state['user_id'] = user[0]
+                st.session_state['user_role'] = user[1]
                 st.rerun()
             else:
-                st.error("اسم المستخدم أو كلمة السر غير صحيحة")
+                st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
+
+if not st.session_state['logged_in']:
     login()
     st.stop()
 
@@ -699,7 +687,7 @@ elif menu == "الملف الشخصي":
     
     with col_prof1:
         st.subheader("الصورة الشخصية")
-        if u_data and len(u_data) > 5 and u_data[5] and isinstance(u_data[5], str) and os.path.exists(u_data[5]):
+        if u_data[5] and os.path.exists(u_data[5]):
             st.image(u_data[5], width=180)
         else:
             st.info("لا توجد صورة مضافة.")
