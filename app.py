@@ -246,22 +246,21 @@ if 'user_id' not in st.session_state:
 if 'user_role' not in st.session_state:
     st.session_state['user_role'] = None
 
-def login():# العنوان والتفاصيل في الأول
+def login():
     st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
-st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
 
-# الـ Form بدون إطار (border=False) ليعطي نفس الشكل القديم تماماً
-with st.form("login_form", border=False):
+    with st.form("login_form", border=False):
         username = st.text_input("اسم المستخدم")
         password = st.text_input("كلمة المرور", type="password")
         login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
-
-    if login_button:
-        # الكود اللي بيتحقق من صحة الباسورد واسم المستخدم
-    if username == "admin" and password == "123456": # عدل شروطك هنا
-        st.success("تم تسجيل الدخول بنجاح!")
-    else:
-        st.error("اسم المستخدم أو كلمة السر غير صحيحة")
+        
+        if login_button:
+            if username == "admin" and password == "123456":
+                st.session_state["logged_in"] = True
+                st.rerun()
+            else:
+                st.error("اسم المستخدم أو كلمة السر غير صحيحة")
 
 if not st.session_state['logged_in']:
     login()
