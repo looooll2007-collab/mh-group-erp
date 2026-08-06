@@ -557,9 +557,14 @@ elif menu == "المالية والأجور":
 
         df_fin = pd.read_sql_query("SELECT * FROM finance", conn)
         st.dataframe(df_fin, use_container_width=True)
-        if not df_fin.empty:
-            fin_to_delete = st.selectbox("اختر ID معاملة لحذفها", df_fin['id'].tolist())
-            if st.button("حذف المعاملة المالية"):
+        if submit:
+            cursor.execute(
+                "INSERT INTO finance (type, amount, category, description) VALUES (?, ?, ?, ?)",
+                (fin_type, amount, category, description)
+            )
+            conn.commit()
+            st.success("تم تسجيل المعاملة المالية!")
+            st.rerun()
                 cursor.execute("DELETE FROM finance WHERE id = ?", (fin_to_delete,))
                 conn.commit()
                 st.success("تم الحذف!")
