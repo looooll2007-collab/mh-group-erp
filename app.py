@@ -565,10 +565,11 @@ elif menu == "المالية والأجور":
             conn.commit()
             st.success("تم تسجيل المعاملة المالية!")
             st.rerun()
-                cursor.execute("DELETE FROM finance WHERE id = ?", (fin_to_delete,))
-                conn.commit()
-                st.success("تم الحذف!")
-                st.rerun()
+                if st.button("حذف المعاملة"):
+    cursor.execute("DELETE FROM finance WHERE id = ?", (fin_to_delete,))
+    conn.commit()
+    st.success("تم الحذف!")
+    st.rerun()
 
 # ---------------------------------------------------------
 # 8. قسم المخزون العقاري
