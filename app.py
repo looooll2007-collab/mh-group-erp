@@ -250,7 +250,28 @@ def login():
     st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
 
-    with st.form("login_form", border=False):
+    # CSS لتنسيق زرار الـ Form باللون الذهبي وإخفاء حدود الـ Form
+    st.markdown("""
+        <style>
+        div[data-testid="stForm"] {
+            border: none !important;
+            padding: 0 !important;
+        }
+        div[data-testid="stForm"] button {
+            background-color: #d4af37 !important;
+            color: #000000 !important;
+            font-weight: bold !important;
+            border: none !important;
+            width: 100% !important;
+        }
+        div[data-testid="stForm"] button:hover {
+            background-color: #b89628 !important;
+            color: #ffffff !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    with st.form("login_form"):
         username = st.text_input("اسم المستخدم")
         password = st.text_input("كلمة المرور", type="password")
         login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
@@ -261,7 +282,6 @@ def login():
                 st.rerun()
             else:
                 st.error("اسم المستخدم أو كلمة السر غير صحيحة")
-
 if not st.session_state['logged_in']:
     login()
     st.stop()
