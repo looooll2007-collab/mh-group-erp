@@ -250,21 +250,21 @@ def login():
     st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
 
-    # CSS لتنسيق زرار الـ Form باللون الذهبي وإخفاء حدود الـ Form
+    # CSS محدد فقط لزرار التسجيل وبدون ما يلمس أيقونة العين
     st.markdown("""
         <style>
         div[data-testid="stForm"] {
             border: none !important;
             padding: 0 !important;
         }
-        div[data-testid="stForm"] button {
+        div[data-testid="stFormSubmitButton"] > button {
             background-color: #d4af37 !important;
             color: #000000 !important;
             font-weight: bold !important;
             border: none !important;
             width: 100% !important;
         }
-        div[data-testid="stForm"] button:hover {
+        div[data-testid="stFormSubmitButton"] > button:hover {
             background-color: #b89628 !important;
             color: #ffffff !important;
         }
@@ -282,7 +282,6 @@ def login():
                 st.rerun()
             else:
                 st.error("اسم المستخدم أو كلمة السر غير صحيحة")
-if not st.session_state['logged_in']:
     login()
     st.stop()
 
