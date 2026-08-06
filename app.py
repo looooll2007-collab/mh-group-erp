@@ -3,6 +3,8 @@ import sqlite3
 import pandas as pd
 import plotly.express as px
 import os
+import datetime
+import extra_streamlit_components as stx
 
 # مكتبة إنشاء ملفات PDF
 try:
@@ -240,14 +242,25 @@ def generate_payroll_pdf(df_payroll):
     return pdf_file_path
 
 # ---------------------------------------------------------
-# 4. تسجيل الدخول والقائمة الجانبية
+# 4. إعداد مدير الكوكيز وتثبيت الجلسة
 # ---------------------------------------------------------
+cookie_manager = stx.CookieManager()
+
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'user_id' not in st.session_state:
     st.session_state['user_id'] = None
 if 'user_role' not in st.session_state:
     st.session_state['user_role'] = None
+
+# استرجاع الكوكي عند تحديث الصفحة
+user_id_cookie = cookie_manager.get(cookie="mh_user_id")
+user_role_cookie = cookie_manager.get(cookie="mh_user_role")
+
+if user_id_cookie and user_role_cookie and not st.session_state['logged_in']:
+    st.session_state['logged_in'] = True
+    st.session_state['user_id'] = int(user_id_cookie)
+    st.session_state['user_role'] = str(user_role_cookie)
 
 def login():
     st.markdown("<h1 style='text-align: center; color: #ffd700;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
@@ -268,6 +281,12 @@ def login():
                 st.session_state['logged_in'] = True
                 st.session_state['user_id'] = user[0]
                 st.session_state['user_role'] = user[1]
+                
+                # حفظ الكوكي لمدة 7 أيام
+                expires = datetime.datetime.now() + datetime.timedelta(days=7)
+                cookie_manager.set("mh_user_id", str(user[0]), expires_at=expires, key="set_uid")
+                cookie_manager.set("mh_user_role", str(user[1]), expires_at=expires, key="set_urole")
+                
                 st.rerun()
             else:
                 st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
@@ -323,6 +342,11 @@ if st.sidebar.button("🚪 تسجيل الخروج"):
     st.session_state['logged_in'] = False
     st.session_state['user_id'] = None
     st.session_state['user_role'] = None
+    
+    # حذف الكوكيز عند الخروج
+    cookie_manager.delete("mh_user_id", key="del_uid")
+    cookie_manager.delete("mh_user_role", key="del_urole")
+    
     st.rerun()
 
 # ---------------------------------------------------------
@@ -870,7 +894,6 @@ elif menu == "رفع المستندات":
                     st.markdown("---")
                     st.caption("🔍 **معاينة المستند:**")
                     if file_ext in ['.png', '.jpg', '.jpeg']:
-                        # تم التعديل هنا لاستخدام use_container_width المتوافق مع إصدارات Streamlit الحديثة
                         st.image(file_path, use_container_width=True)
                     elif file_ext == '.pdf':
                         st.info("📄 ملف PDF جاهز للتحميل عبر الزر أعلاه (أو يمكنك معاينته عبر المتصفح).")
