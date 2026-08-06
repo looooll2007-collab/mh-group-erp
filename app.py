@@ -870,7 +870,8 @@ elif menu == "رفع المستندات":
                     st.markdown("---")
                     st.caption("🔍 **معاينة المستند:**")
                     if file_ext in ['.png', '.jpg', '.jpeg']:
-                        st.image(file_path, use_column_width=True)
+                        # تم التعديل هنا لاستخدام use_container_width المتوافق مع إصدارات Streamlit الحديثة
+                        st.image(file_path, use_container_width=True)
                     elif file_ext == '.pdf':
                         st.info("📄 ملف PDF جاهز للتحميل عبر الزر أعلاه (أو يمكنك معاينته عبر المتصفح).")
         else:
