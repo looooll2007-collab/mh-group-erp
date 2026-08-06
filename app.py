@@ -699,7 +699,7 @@ elif menu == "الملف الشخصي":
     
     with col_prof1:
         st.subheader("الصورة الشخصية")
-        if u_data[5] and os.path.exists(u_data[5]):
+        if u_data and len(u_data) > 5 and u_data[5] and isinstance(u_data[5], str) and os.path.exists(u_data[5]):
             st.image(u_data[5], width=180)
         else:
             st.info("لا توجد صورة مضافة.")
