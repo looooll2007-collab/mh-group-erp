@@ -434,76 +434,137 @@ elif menu == "الموارد البشرية (HR)":
                     st.success("تم التعديل بنجاح!")
                     st.rerun()
 
-# ==========================================
-# 💰 قسم المالية والأجور (Finance & Payroll)
-# ==========================================
-
-# 1. التأكد من إنشاء الجدول بالشكل الصحيح لتفادي أخطاء SQLite
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS finance (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT,
-        amount REAL,
-        category TEXT,
-        description TEXT,
-        date TEXT
-    )
-""")
-conn.commit()
-
-st.header("💰 قسم المالية والأجور")
-
-# 2. نموذج إدخال المعاملة
-with st.form("finance_form", clear_on_submit=True):
-    col1, col2 = st.columns(2)
+# ---------------------------------------------------------
+# 7. قسم المالية والأجور (Payroll & Finance)
+# ---------------------------------------------------------
+elif menu == "المالية والأجور":
+    st.header("💰 قسم المالية وحساب الأجور والسُلف")
     
-    with col1:
-        fin_type = st.selectbox("نوع المعاملة:", ["إيراد", "مصروف"])
-        amount_input = st.number_input("المبلغ (بالجنيه):", min_value=0.0, step=100.0)
-        category = st.text_input("التصنيف (مثال: بيع عقار، صيانة، توريدات):")
+    tab1, tab2, tab3 = st.tabs(["📊 كشف الأجور والتصدير PDF/Excel", "💸 تسجيل السُلف", "🧾 الخزينة والمعاملات المالية"])
+    
+    with tab1:
+        st.subheader("📑 كشف الأجور والصافي لكل العاملين")
         
-    with col2:
-        trans_date = st.date_input("تاريخ المعاملة:")
-        description = st.text_area("تفاصيل المعاملة:")
-
-    submit_finance_btn = st.form_submit_button("تسجيل المعاملة", use_container_width=True)
-
-# 3. معالجة الإدخال عند الضغط على زر التسجيل
-if submit_finance_btn:
-    try:
-        amount_val = float(amount_input)
+        df_hr_all = pd.read_sql_query("SELECT * FROM hr", conn)
+        df_adv_all = pd.read_sql_query("SELECT emp_code, SUM(amount) as total_adv FROM advances GROUP BY emp_code", conn)
         
-        if amount_val <= 0:
-            st.warning("⚠️ يرجى إدخال مبلغ أكبر من صفر.")
+        if not df_hr_all.empty:
+            payroll_data = []
+            for _, emp in df_hr_all.iterrows():
+                code = emp['emp_code'] or '---'
+                name = emp['name']
+                cat = emp['worker_category'] or 'عامل'
+                daily = emp['daily_rate'] or 0.0
+                h_rate = emp['hourly_rate'] or 0.0
+                h_worked = emp['work_hours'] or 0.0
+                
+                # حساب المستحق
+                earned = (daily) + (h_rate * h_worked)
+                
+                # جلب السلف
+                adv_row = df_adv_all[df_adv_all['emp_code'] == code] if not df_adv_all.empty else pd.DataFrame()
+                adv_amt = adv_row['total_adv'].values[0] if not adv_row.empty else 0.0
+                
+                net = earned - adv_amt
+                
+                payroll_data.append({
+                    "الكود الوظيفي": code,
+                    "اسم الموظف/المورد": name,
+                    "نوع العامل": cat,
+                    "اليومية": daily,
+                    "سعر الساعة": h_rate,
+                    "ساعات العمل": h_worked,
+                    "إجمالي المستحق": earned,
+                    "إجمالي السلف": adv_amt,
+                    "الصافي المستحق": net
+                })
+            
+            df_payroll = pd.DataFrame(payroll_data)
+            st.dataframe(df_payroll, use_container_width=True)
+            
+            st.markdown("---")
+            col_pdf1, col_pdf2 = st.columns(2)
+            
+            with col_pdf1:
+                if st.button("📥 إنشاء وتنزيل كشف الأجور PDF"):
+                    try:
+                        pdf_path = generate_payroll_pdf(df_payroll)
+                        with open(pdf_path, "rb") as f:
+                            st.download_button(
+                                label="💾 اضغط هنا لتحميل ملف الـ PDF",
+                                data=f,
+                                file_name="MH_GROUP_Payroll_Report.pdf",
+                                mime="application/pdf"
+                            )
+                    except Exception as e:
+                        st.error(f"حدث خطأ أثناء تصدير PDF: {e}")
+
+            with col_pdf2:
+                csv_data = df_payroll.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    label="📊 تنزيل كشف الأجور كملف Excel (عربي)",
+                    data=csv_data,
+                    file_name="MH_GROUP_Payroll_Report.csv",
+                    mime="text/csv"
+                )
         else:
-            # استعلام الإضافة
-            cursor.execute("""
-                INSERT INTO finance (type, amount, category, description, date) 
-                VALUES (?, ?, ?, ?, ?)
-            """, (fin_type, amount_val, category, description, str(trans_date)))
-            
-            # حفظ التغييرات فوراً
-            conn.commit()
-            
-            st.success("✅ تم تسجيل المعاملة بنجاح!")
-            st.rerun() # إعادة تحميل الصفحة لرؤية البيانات فوراً
-            
-    except ValueError:
-        st.error("⚠️ يرجى إدخال قيمة مالية صحيحة في خانة المبلغ.")
-    except Exception as e:
-        st.error(f"حدث خطأ أثناء الحفظ: {e}")
+            st.info("لا توجد بيانات موظفين أو عمال مسجلة بعد في قسم HR.")
 
-st.markdown("---")
+    with tab2:
+        st.subheader("💵 تسجيل سلفة جديدة")
+        df_hr_list = pd.read_sql_query("SELECT emp_code, name FROM hr", conn)
+        if not df_hr_list.empty:
+            with st.form("adv_form"):
+                emp_choice = st.selectbox("اختر الموظف / العامل", df_hr_list['emp_code'] + " - " + df_hr_list['name'])
+                selected_code = emp_choice.split(" - ")[0]
+                selected_name = emp_choice.split(" - ")[1]
+                
+                adv_amount = st.number_input("مبلغ السلفة (ج.م)", min_value=0.0, step=50.0)
+                submit_adv = st.form_submit_button("تسجيل السلفة")
+                if submit_adv:
+                    cursor.execute("INSERT INTO advances (emp_code, person_name, amount) VALUES (?, ?, ?)",
+                                   (selected_code, selected_name, adv_amount))
+                    conn.commit()
+                    st.success(f"تم تسجيل سلفة بمبلغ {adv_amount} ج.م لـ {selected_name}")
+                    st.rerun()
+                    
+            st.subheader("📜 سجل السُلف المسجلة")
+            df_adv_logs = pd.read_sql_query("SELECT id, emp_code as 'الكود', person_name as 'الاسم', amount as 'المبلغ', date_added as 'التاريخ' FROM advances", conn)
+            st.dataframe(df_adv_logs, use_container_width=True)
+            if not df_adv_logs.empty:
+                adv_del_id = st.selectbox("حذف سلفة (ID)", df_adv_logs['id'].tolist())
+                if st.button("حذف السلفة"):
+                    cursor.execute("DELETE FROM advances WHERE id = ?", (adv_del_id,))
+                    conn.commit()
+                    st.success("تم الحذف!")
+                    st.rerun()
 
-# 4. عرض جميع المعاملات المسجلة في جدول متطابق
-st.subheader("📊 سجل المعاملات المالية المسجلة")
-cursor.execute("SELECT id as 'م', type as 'النوع', amount as 'المبلغ', category as 'التصنيف', description as 'التفاصيل', date as 'التاريخ' FROM finance ORDER BY id DESC")
-records = cursor.fetchall()
+    with tab3:
+        st.subheader("💳 الخزينة العامة والإيرادات / المصروفات")
+        with st.form("fin_form"):
+            fin_type = st.selectbox("نوع المعاملة", ["إيراد", "مصروف"])
+            amount = st.number_input("المبلغ (ج.م)", min_value=0.0, step=100.0)
+            category = st.text_input("التصنيف (مثال: صيانة, توريدات, بيع عقار)")
+            description = st.text_area("تفاصيل المعاملة")
+            
+            submit = st.form_submit_button("تسجيل المعاملة")
+            if submit:
+                cursor.execute("INSERT INTO finance (type, amount, category, description) VALUES (?, ?, ?)",
+                               (fin_type, amount, category, description))
+                conn.commit()
+                st.success("تم تسجيل المعاملة المالية!")
+                st.rerun()
 
-if records:
-    st.dataframe(records, use_container_width=True)
-else:
-    st.info("ℹ️ لا توجد معاملات مالية مسجلة حتى الآن.")
+        df_fin = pd.read_sql_query("SELECT * FROM finance", conn)
+        st.dataframe(df_fin, use_container_width=True)
+        if not df_fin.empty:
+            fin_to_delete = st.selectbox("اختر ID معاملة لحذفها", df_fin['id'].tolist())
+            if st.button("حذف المعاملة المالية"):
+                cursor.execute("DELETE FROM finance WHERE id = ?", (fin_to_delete,))
+                conn.commit()
+                st.success("تم الحذف!")
+                st.rerun()
+
 # ---------------------------------------------------------
 # 8. قسم المخزون العقاري
 # ---------------------------------------------------------
