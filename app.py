@@ -252,15 +252,12 @@ st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة
 
 # الـ Form بدون إطار (border=False) ليعطي نفس الشكل القديم تماماً
 with st.form("login_form", border=False):
-    username = st.text_input("اسم المستخدم")
-    password = st.text_input("كلمة المرور", type="password")
-    
-    # زرار تسجيل الدخول
-    login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
+        username = st.text_input("اسم المستخدم")
+        password = st.text_input("كلمة المرور", type="password")
+        login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
 
-# تنفيذ التنسيق والتحقق أول ما يضغط Enter أو الماوس
- if login_button:
-    # كود التحقق من الباسورد بتاعك:
+    if login_button:
+        # الكود اللي بيتحقق من صحة الباسورد واسم المستخدم
     if username == "admin" and password == "123456": # عدل شروطك هنا
         st.success("تم تسجيل الدخول بنجاح!")
     else:
