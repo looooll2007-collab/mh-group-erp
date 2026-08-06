@@ -549,8 +549,16 @@ elif menu == "المالية والأجور":
             
             submit = st.form_submit_button("تسجيل المعاملة")
             if submit:
-                cursor.execute("INSERT INTO finance (type, amount, category, description) VALUES (?, ?, ?)",
-                               (fin_type, amount, category, description))
+                cursor.execute("""
+    CREATE TABLE IF NOT EXISTS finance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT,
+        amount REAL,
+        category TEXT,
+        description TEXT,
+        date TEXT
+    )
+""")
                 conn.commit()
                 st.success("تم تسجيل المعاملة المالية!")
                 st.rerun()
