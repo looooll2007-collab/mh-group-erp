@@ -259,7 +259,8 @@ with st.form("login_form", border=False):
     login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
 
 # تنفيذ التنسيق والتحقق أول ما يضغط Enter أو الماوس
-if submit:
+if if login_button:
+    # كود التحقق من الباسورد بتاعك:
     if username == "admin" and password == "123456": # عدل شروطك هنا
         st.success("تم تسجيل الدخول بنجاح!")
     else:
