@@ -246,18 +246,17 @@ if 'user_id' not in st.session_state:
 if 'user_role' not in st.session_state:
     st.session_state['user_role'] = None
 
-def login():
-    st.markdown("<h1 style='text-align: center; color: #ffd700;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    # هنعمل Form بيجمع الخانات مع الزرار
-with st.form("login_form"):
+def login():# العنوان والتفاصيل في الأول
+st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
+
+# الـ Form بدون إطار (border=False) ليعطي نفس الشكل القديم تماماً
+with st.form("login_form", border=False):
     username = st.text_input("اسم المستخدم")
-    password = st.text_input("كلمة السر", type="password")
+    password = st.text_input("كلمة المرور", type="password")
     
-    # تحويل الزرار لـ Submit Button
-    submit = st.form_submit_button("تسجيل الدخول")
+    # زرار تسجيل الدخول
+    login_button = st.form_submit_button("تسجيل الدخول", use_container_width=True)
 
 # تنفيذ التنسيق والتحقق أول ما يضغط Enter أو الماوس
 if submit:
