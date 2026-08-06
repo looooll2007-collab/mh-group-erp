@@ -306,7 +306,6 @@ elif user_role == "عقارات":
     allowed_menu.insert(0, "المخزون العقاري")
     allowed_menu.append("أسهم المستثمرين")
 
-# حل مشكلة Duplicate Element عبر إضافة key فريد للقائمة الجانبية
 menu = st.sidebar.radio("📋 الأقسام المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
 
 if st.sidebar.button("🚪 تسجيل الخروج", key="logout_btn"):
@@ -778,13 +777,14 @@ elif menu == "أسهم المستثمرين":
             
             with col_chart1:
                 st.subheader("🥧 توزيع رؤوس الأموال حسب العقار")
+                # تم إصلاح لون الرسم البياني هنا باستبداله بـ YlOrBr_r الصريح
                 fig_pie = px.pie(
                     df_raw_inv, 
                     values='invested_amount', 
                     names='prop_code', 
                     hover_data=['investor_name'],
                     hole=0.45,
-                    color_discrete_sequence=px.colors.sequential.Gold_r
+                    color_discrete_sequence=px.colors.sequential.YlOrBr_r
                 )
                 fig_pie.update_traces(textinfo='percent+label', marker=dict(line=dict(color='#0d1117', width=2)))
                 fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
