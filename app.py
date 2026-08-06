@@ -251,23 +251,20 @@ def login():
     st.markdown("<h3 style='text-align: center;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        username_input = st.text_input("اسم المستخدم")
-        password_input = st.text_input("كلمة المرور", type="password")
-        if st.button("تسجيل الدخول", use_container_width=True):
-            conn = sqlite3.connect("mh_group_erp.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, role FROM users WHERE username = ? AND password = ?", (username_input, password_input))
-            user = cursor.fetchone()
-            conn.close()
-            
-            if user:
-                st.session_state['logged_in'] = True
-                st.session_state['user_id'] = user[0]
-                st.session_state['user_role'] = user[1]
-                st.rerun()
-            else:
-                st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
+    # هنعمل Form بيجمع الخانات مع الزرار
+with st.form("login_form"):
+    username = st.text_input("اسم المستخدم")
+    password = st.text_input("كلمة السر", type="password")
+    
+    # تحويل الزرار لـ Submit Button
+    submit = st.form_submit_button("تسجيل الدخول")
+
+# تنفيذ التنسيق والتحقق أول ما يضغط Enter أو الماوس
+if submit:
+    if username == "admin" and password == "123456": # عدل شروطك هنا
+        st.success("تم تسجيل الدخول بنجاح!")
+    else:
+        st.error("اسم المستخدم أو كلمة السر غير صحيحة")
 
 if not st.session_state['logged_in']:
     login()
