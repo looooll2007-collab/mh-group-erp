@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import os
 import datetime
-import extra_streamlit_components as stx
+import uuid
 
 # مكتبة إنشاء ملفات PDF
 try:
@@ -13,66 +13,23 @@ except ImportError:
     st.error("يرجى تثبيت مكتبة fpdf عبر الأمر: pip install fpdf2")
 
 # ---------------------------------------------------------
-# 1. إعدادات الصفحة والتصميم الفخم (Luxury Theme & CSS)
+# 1. إعدادات الصفحة والتصميم (Luxury Theme & CSS)
 # ---------------------------------------------------------
 st.set_page_config(page_title="MH GROUP ERP", layout="wide", page_icon="🏢")
 
 st.markdown("""
     <style>
-    /* خلفية التطبيق العامة */
-    .stApp {
-        background-color: #0d1117;
-        color: #e6edf3;
-    }
-    /* تكبير عناوين الأقسام الرئيسية وتجميلها */
-    h1, h2, h3 {
-        color: #d4af37 !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-weight: bold;
-    }
+    .stApp { background-color: #0d1117; color: #e6edf3; }
+    h1, h2, h3 { color: #d4af37 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: bold; }
     h1 { font-size: 2.2rem !important; }
     h2 { font-size: 1.8rem !important; border-bottom: 2px solid #d4af37; padding-bottom: 8px; }
     h3 { font-size: 1.4rem !important; }
-    
-    /* القائمة الجانبية */
-    section[data-testid="stSidebar"] {
-        background-color: #161b22 !important;
-        border-right: 1px solid #30363d;
-    }
-    section[data-testid="stSidebar"] .stRadio label {
-        font-size: 1.15rem !important;
-        font-weight: 600 !important;
-        color: #c9d1d9 !important;
-        padding: 5px 0;
-    }
-    
-    /* البطاقات والإحصائيات Metric Cards */
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #1f242d 0%, #161b22 100%);
-        border: 1px solid #d4af37;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    }
-    div[data-testid="stMetricValue"] {
-        color: #ffd700 !important;
-        font-size: 1.8rem !important;
-    }
-
-    /* الأزرار Buttons */
-    .stButton>button {
-        background: linear-gradient(45deg, #d4af37, #aa7c11) !important;
-        color: #000000 !important;
-        font-weight: bold !important;
-        font-size: 1rem !important;
-        border-radius: 8px !important;
-        border: none !important;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        background: linear-gradient(45deg, #ffd700, #c59b27) !important;
-        box-shadow: 0 0 10px rgba(212, 175, 55, 0.6);
-    }
+    section[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
+    section[data-testid="stSidebar"] .stRadio label { font-size: 1.15rem !important; font-weight: 600 !important; color: #c9d1d9 !important; padding: 5px 0; }
+    div[data-testid="stMetric"] { background: linear-gradient(135deg, #1f242d 0%, #161b22 100%); border: 1px solid #d4af37; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4); }
+    div[data-testid="stMetricValue"] { color: #ffd700 !important; font-size: 1.8rem !important; }
+    .stButton>button { background: linear-gradient(45deg, #d4af37, #aa7c11) !important; color: #000000 !important; font-weight: bold !important; font-size: 1rem !important; border-radius: 8px !important; border: none !important; transition: all 0.3s ease; }
+    .stButton>button:hover { background: linear-gradient(45deg, #ffd700, #c59b27) !important; box-shadow: 0 0 10px rgba(212, 175, 55, 0.6); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -107,13 +64,22 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # حساب الأدمن الرئيسي
     cursor.execute("SELECT * FROM users WHERE id = 1")
     if not cursor.fetchone():
         cursor.execute('''
             INSERT INTO users (id, username, password, full_name, email, phone, avatar_path, role)
             VALUES (1, 'admin', 'mh123456', 'مدير النظام - MH GROUP', 'admin@mhgroup.com', '01000000000', '', 'ادمن')
         ''')
+
+    # جدول الجلسات النشطة للتأكد من حفظ الدخول عبر الـ URL
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS active_sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER,
+            role TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
 
     # جدول HR
     cursor.execute('''
@@ -242,10 +208,8 @@ def generate_payroll_pdf(df_payroll):
     return pdf_file_path
 
 # ---------------------------------------------------------
-# 4. إعداد مدير الكوكيز وتثبيت الجلسة
+# 4. نظام الجلسة وتثبيت الدخول عبر URL (Query Params)
 # ---------------------------------------------------------
-cookie_manager = stx.CookieManager()
-
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'user_id' not in st.session_state:
@@ -253,14 +217,19 @@ if 'user_id' not in st.session_state:
 if 'user_role' not in st.session_state:
     st.session_state['user_role'] = None
 
-# استرجاع الكوكي عند تحديث الصفحة
-user_id_cookie = cookie_manager.get(cookie="mh_user_id")
-user_role_cookie = cookie_manager.get(cookie="mh_user_role")
-
-if user_id_cookie and user_role_cookie and not st.session_state['logged_in']:
-    st.session_state['logged_in'] = True
-    st.session_state['user_id'] = int(user_id_cookie)
-    st.session_state['user_role'] = str(user_role_cookie)
+query_params = st.query_params
+if "session" in query_params and not st.session_state['logged_in']:
+    session_token = query_params["session"]
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, role FROM active_sessions WHERE token = ?", (session_token,))
+    sess_data = cursor.fetchone()
+    conn.close()
+    
+    if sess_data:
+        st.session_state['logged_in'] = True
+        st.session_state['user_id'] = sess_data[0]
+        st.session_state['user_role'] = sess_data[1]
 
 def login():
     st.markdown("<h1 style='text-align: center; color: #ffd700;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
@@ -275,20 +244,21 @@ def login():
             cursor = conn.cursor()
             cursor.execute("SELECT id, role FROM users WHERE username = ? AND password = ?", (username_input, password_input))
             user = cursor.fetchone()
-            conn.close()
             
             if user:
+                token = str(uuid.uuid4())
+                cursor.execute("INSERT INTO active_sessions (token, user_id, role) VALUES (?, ?, ?)", (token, user[0], user[1]))
+                conn.commit()
+                conn.close()
+                
                 st.session_state['logged_in'] = True
                 st.session_state['user_id'] = user[0]
                 st.session_state['user_role'] = user[1]
                 
-                # حفظ الكوكي لمدة 7 أيام
-                expires = datetime.datetime.now() + datetime.timedelta(days=7)
-                cookie_manager.set("mh_user_id", str(user[0]), expires_at=expires, key="set_uid")
-                cookie_manager.set("mh_user_role", str(user[1]), expires_at=expires, key="set_urole")
-                
+                st.query_params["session"] = token
                 st.rerun()
             else:
+                conn.close()
                 st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
 
 if not st.session_state['logged_in']:
@@ -339,14 +309,18 @@ elif user_role == "عقارات":
 menu = st.sidebar.radio("📋 الأقسام المتاحة:", allowed_menu)
 
 if st.sidebar.button("🚪 تسجيل الخروج"):
+    if "session" in st.query_params:
+        token_to_del = st.query_params["session"]
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM active_sessions WHERE token = ?", (token_to_del,))
+        conn.commit()
+        conn.close()
+        st.query_params.clear()
+        
     st.session_state['logged_in'] = False
     st.session_state['user_id'] = None
     st.session_state['user_role'] = None
-    
-    # حذف الكوكيز عند الخروج
-    cookie_manager.delete("mh_user_id", key="del_uid")
-    cookie_manager.delete("mh_user_role", key="del_urole")
-    
     st.rerun()
 
 # ---------------------------------------------------------
@@ -698,7 +672,105 @@ elif menu == "المخزون العقاري":
         conn.close()
 
 # ---------------------------------------------------------
-# 9. إدارة المستخدمين
+# 9. قسم تكنولوجيا المعلومات (IT)
+# ---------------------------------------------------------
+elif menu == "قسم تكنولوجيا المعلومات (IT)":
+    st.header("💻 قسم تكنولوجيا المعلومات (IT)")
+    
+    tab_it1, tab_it2 = st.tabs(["➕ تسجيل ساعات ودعم IT", "📋 سجلات IT المسجلة"])
+    
+    with tab_it1:
+        with st.form("it_form"):
+            emp_name = st.text_input("اسم المهندس / تقني الـ IT")
+            work_hours = st.number_input("عدد ساعات العمل المسجلة", min_value=0.0, step=0.5)
+            hourly_rate = st.number_input("سعر الساعة (ج.م)", min_value=0.0, step=10.0)
+            
+            submit_it = st.form_submit_button("حفظ البيانات")
+            if submit_it:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO it_logs (emp_name, work_hours, hourly_rate)
+                    VALUES (?, ?, ?)
+                """, (emp_name, work_hours, hourly_rate))
+                conn.commit()
+                conn.close()
+                st.success("تم تسجيل البيانات بنجاح!")
+                st.rerun()
+                
+    with tab_it2:
+        conn = get_connection()
+        df_it = pd.read_sql_query("SELECT id, emp_name as 'اسم المهندس', work_hours as 'ساعات العمل', hourly_rate as 'سعر الساعة', (work_hours * hourly_rate) as 'إجمالي الإستحقاق' FROM it_logs", conn)
+        st.dataframe(df_it, use_container_width=True)
+        if not df_it.empty:
+            it_to_del = st.selectbox("حذف سجل IT (ID)", df_it['id'].tolist())
+            if st.button("حذف السجل"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM it_logs WHERE id = ?", (it_to_del,))
+                conn.commit()
+                st.success("تم الحذف!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 10. قسم أسهم المستثمرين
+# ---------------------------------------------------------
+elif menu == "أسهم المستثمرين":
+    st.header("📈 إدارة أسهم الشركاء والمستثمرين")
+    
+    tab_inv1, tab_inv2 = st.tabs(["➕ ربط مستثمر بعقار", "📋 جدول توزيع الحصص والأسهم"])
+    
+    with tab_inv1:
+        conn = get_connection()
+        df_props_list = pd.read_sql_query("SELECT prop_code, prop_type, total_price FROM properties", conn)
+        conn.close()
+        
+        if not df_props_list.empty:
+            with st.form("investor_form"):
+                investor_name = st.text_input("اسم المستثمر / الشريك")
+                selected_prop = st.selectbox("اختر العقار", df_props_list['prop_code'])
+                share_percentage = st.number_input("نسبة الشراكة (%)", min_value=0.0, max_value=100.0, step=1.0)
+                invested_amount = st.number_input("المبلغ المستثمر (ج.م)", min_value=0.0, step=1000.0)
+                
+                submit_inv = st.form_submit_button("حفظ بيانات المستثمر")
+                if submit_inv:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO investors (investor_name, prop_code, share_percentage, invested_amount)
+                        VALUES (?, ?, ?, ?)
+                    """, (investor_name, selected_prop, share_percentage, invested_amount))
+                    conn.commit()
+                    conn.close()
+                    st.success("تمت إضافة المستثمر بنجاح!")
+                    st.rerun()
+        else:
+            st.info("قم بإضافة عقارات في المخزون العقاري أولاً لتتمكن من إضافة مستثمرين عليها.")
+
+    with tab_inv2:
+        conn = get_connection()
+        df_inv = pd.read_sql_query("""
+            SELECT i.id, i.investor_name as 'اسم المستثمر', i.prop_code as 'كود العقار', 
+                   p.prop_type as 'نوع العقار', i.share_percentage as 'النسبة (%)', 
+                   i.invested_amount as 'المبلغ المستثمر'
+            FROM investors i
+            LEFT JOIN properties p ON i.prop_code = p.prop_code
+        """, conn)
+        st.dataframe(df_inv, use_container_width=True)
+        if not df_inv.empty:
+            inv_to_del = st.selectbox("حذف مستثمر (ID)", df_inv['id'].tolist())
+            if st.button("حذف الشريك/المستثمر"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM investors WHERE id = ?", (inv_to_del,))
+                conn.commit()
+                st.success("تم الحذف!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 11. إدارة المستخدمين
 # ---------------------------------------------------------
 elif menu == "إدارة المستخدمين والصلاحيات":
     st.header("🔐 إدارة المستخدمين والصلاحيات")
@@ -748,7 +820,7 @@ elif menu == "إدارة المستخدمين والصلاحيات":
         conn.close()
 
 # ---------------------------------------------------------
-# 10. الملف الشخصي
+# 12. الملف الشخصي
 # ---------------------------------------------------------
 elif menu == "الملف الشخصي":
     st.header("👤 الملف الشخصي وإدارة الحساب")
@@ -811,7 +883,7 @@ elif menu == "الملف الشخصي":
                 st.rerun()
 
 # ---------------------------------------------------------
-# 11. رفع وإدارة المستندات والعقود
+# 13. رفع وإدارة المستندات والعقود
 # ---------------------------------------------------------
 elif menu == "رفع المستندات":
     st.header("📁 مركز أرشفة وإدارة المستندات والعقود")
