@@ -71,7 +71,7 @@ def init_db():
             VALUES (1, 'admin', 'mh123456', 'مدير النظام - MH GROUP', 'admin@mhgroup.com', '01000000000', '', 'ادمن')
         ''')
 
-    # جدول الجلسات النشطة للتأكد من حفظ الدخول عبر الـ URL
+    # جدول الجلسات النشطة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS active_sessions (
             token TEXT PRIMARY KEY,
@@ -714,23 +714,23 @@ elif menu == "قسم تكنولوجيا المعلومات (IT)":
         conn.close()
 
 # ---------------------------------------------------------
-# 10. قسم أسهم المستثمرين
+# 10. قسم أسهم المستثمرين (محدث ومحسوب بالأرباح والحصص)
 # ---------------------------------------------------------
 elif menu == "أسهم المستثمرين":
-    st.header("📈 إدارة أسهم الشركاء والمستثمرين")
+    st.header("📈 إدارة أسهم الشركاء ومحاكاة توزيع الأرباح")
     
-    tab_inv1, tab_inv2 = st.tabs(["➕ ربط مستثمر بعقار", "📋 جدول توزيع الحصص والأسهم"])
+    tab_inv1, tab_inv2 = st.tabs(["➕ ربط مستثمر بعقار", "📊 جدول توزيع الحصص والأرباح"])
     
     with tab_inv1:
         conn = get_connection()
-        df_props_list = pd.read_sql_query("SELECT prop_code, prop_type, total_price FROM properties", conn)
+        df_props_list = pd.read_sql_query("SELECT prop_code, prop_type, total_price, selling_price FROM properties", conn)
         conn.close()
         
         if not df_props_list.empty:
             with st.form("investor_form"):
                 investor_name = st.text_input("اسم المستثمر / الشريك")
                 selected_prop = st.selectbox("اختر العقار", df_props_list['prop_code'])
-                share_percentage = st.number_input("نسبة الشراكة (%)", min_value=0.0, max_value=100.0, step=1.0)
+                share_percentage = st.number_input("نسبة الشراكة من الأرباح (%)", min_value=0.0, max_value=100.0, step=1.0)
                 invested_amount = st.number_input("المبلغ المستثمر (ج.م)", min_value=0.0, step=1000.0)
                 
                 submit_inv = st.form_submit_button("حفظ بيانات المستثمر")
@@ -749,25 +749,72 @@ elif menu == "أسهم المستثمرين":
             st.info("قم بإضافة عقارات في المخزون العقاري أولاً لتتمكن من إضافة مستثمرين عليها.")
 
     with tab_inv2:
+        st.subheader("📋 تفاصيل الحصص وصافي الأرباح المتوقعة لكل مستثمر")
         conn = get_connection()
-        df_inv = pd.read_sql_query("""
-            SELECT i.id, i.investor_name as 'اسم المستثمر', i.prop_code as 'كود العقار', 
-                   p.prop_type as 'نوع العقار', i.share_percentage as 'النسبة (%)', 
-                   i.invested_amount as 'المبلغ المستثمر'
+        
+        # ربط جدول المستثمرين بجدول العقارات لحساب صافي الأرباح تلقائياً
+        query = """
+            SELECT 
+                i.id, 
+                i.investor_name, 
+                i.prop_code, 
+                p.prop_type, 
+                p.total_price as prop_cost, 
+                p.selling_price as target_sell,
+                (p.selling_price - p.total_price) as total_profit,
+                i.share_percentage, 
+                i.invested_amount
             FROM investors i
             LEFT JOIN properties p ON i.prop_code = p.prop_code
-        """, conn)
-        st.dataframe(df_inv, use_container_width=True)
-        if not df_inv.empty:
-            inv_to_del = st.selectbox("حذف مستثمر (ID)", df_inv['id'].tolist())
+        """
+        df_raw_inv = pd.read_sql_query(query, conn)
+        conn.close()
+        
+        if not df_raw_inv.empty:
+            # دالة الحساب المباشر
+            def calc_profit(row):
+                profit = row['total_profit'] if pd.notnull(row['total_profit']) else 0.0
+                share = row['share_percentage'] if pd.notnull(row['share_percentage']) else 0.0
+                invested = row['invested_amount'] if pd.notnull(row['invested_amount']) and row['invested_amount'] > 0 else 1.0
+                
+                # ربح المستثمر (ج.م) = إجمالي ربح العقار * نسبة الشراكة %
+                investor_profit = profit * (share / 100.0)
+                # نسبة العائد ROI = (الربح / رأس المال المستثمر) * 100
+                roi = (investor_profit / invested) * 100.0
+                return pd.Series([investor_profit, roi])
+
+            df_raw_inv[['ربح المستثمر المتوقع (ج.م)', 'العائد على الاستثمار ROI (%)']] = df_raw_inv.apply(calc_profit, axis=1)
+
+            # تجهيز الجدول النهائي للعرض
+            df_display = pd.DataFrame({
+                "ID": df_raw_inv['id'],
+                "اسم المستثمر": df_raw_inv['investor_name'],
+                "كود العقار": df_raw_inv['prop_code'],
+                "نوع العقار": df_raw_inv['prop_type'],
+                "تكلفة العقار (ج.م)": df_raw_inv['prop_cost'],
+                "سعر البيع (ج.م)": df_raw_inv['target_sell'],
+                "إجمالي ربح العقار (ج.م)": df_raw_inv['total_profit'],
+                "نسبة الشراكة (%)": df_raw_inv['share_percentage'],
+                "المبلغ المستثمر (ج.م)": df_raw_inv['invested_amount'],
+                "حصة الربح المتوقعة (ج.م)": df_raw_inv['ربح المستثمر المتوقع (ج.م)'],
+                "العائد ROI (%)": df_raw_inv['العائد على الاستثمار ROI (%)'].round(2)
+            })
+
+            st.dataframe(df_display, use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("🗑️ حذف سجل مستثمر")
+            inv_to_del = st.selectbox("اختر رقم التعريف للحذف (ID)", df_display['ID'].tolist())
             if st.button("حذف الشريك/المستثمر"):
+                conn = get_connection()
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM investors WHERE id = ?", (inv_to_del,))
                 conn.commit()
-                st.success("تم الحذف!")
                 conn.close()
+                st.success("تم الحذف بنجاح!")
                 st.rerun()
-        conn.close()
+        else:
+            st.info("لا يوجد مستثمرون مسجلون حالياً.")
 
 # ---------------------------------------------------------
 # 11. إدارة المستخدمين
