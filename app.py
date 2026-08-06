@@ -247,7 +247,7 @@ if 'user_role' not in st.session_state:
     st.session_state['user_role'] = None
 
 def login():# العنوان والتفاصيل في الأول
-st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #d4af37;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='text-align: center; color: #d4af37;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
 
 # الـ Form بدون إطار (border=False) ليعطي نفس الشكل القديم تماماً
