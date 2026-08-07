@@ -15,7 +15,7 @@ except ImportError:
     st.error("يرجى تثبيت مكتبة fpdf2 عبر الأمر: pip install fpdf2")
 
 # ---------------------------------------------------------
-# 1. إعدادات الصفحة وتهيئة إدارة الثيمات (Theme Engine)
+# 1. إعدادات الصفحة وتهيئة محرك الثيمات (Theme Engine)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="MH GROUP ERP",
@@ -24,11 +24,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# تعيين الثيم الافتراضي في الجلسة
+# الثيم الافتراضي في الجلسة
 if 'app_theme' not in st.session_state:
     st.session_state['app_theme'] = "Dark Executive"
 
-# قاموس ألوان وتصميمات الثيمات المتاحة للمطور
+# قاموس ألوان الثيمات للمطور
 THEMES_CONFIG = {
     "Dark Executive": {
         "bg": "#0d1117",
@@ -84,10 +84,10 @@ THEMES_CONFIG = {
 
 current_theme_cfg = THEMES_CONFIG[st.session_state['app_theme']]
 
-# تطبيق الـ CSS الديناميكي وإلغاء مشكلة Keyboard Tooltips
+# تطبيق CSS مع إلغاء مشكلة Keyboard Tooltips عند التمرير
 st.markdown(f"""
     <style>
-    /* 1. إخفاء وإلغاء أي تلميحات أو ظلال لوحة المفاتيح عند التمرير (Keyboard shortcut tooltips fix) */
+    /* إلغاء حواشي وتلميحات الكيبورد والتأثيرات غير المرغوبة عند تحريك الماوس */
     [data-testid="stSidebar"] [data-testid="stRadio"] label::before,
     [data-testid="stSidebar"] [data-testid="stRadio"] label::after,
     [title*="keyboard"], [aria-label*="keyboard"], .st-emotion-cache-12fmw4p,
@@ -103,13 +103,13 @@ st.markdown(f"""
         box-shadow: none !important;
     }}
 
-    /* 2. خلفيات ونصوص التطبيق الأساسية */
+    /* خلفيات ونصوص التطبيق */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{
         background-color: {current_theme_cfg["bg"]} !important;
         color: {current_theme_cfg["text"]} !important;
     }}
         
-    /* 3. ضبط القائمة الجانبية */
+    /* القائمة الجانبية */
     [data-testid="stSidebar"] {{
         background-color: {current_theme_cfg["sidebar_bg"]} !important;
         border-right: 1px solid {current_theme_cfg["border"]} !important;
@@ -125,7 +125,7 @@ st.markdown(f"""
         transition: all 0.2s ease !important;
     }}
 
-    /* 4. العناوين والنصوص */
+    /* العناوين والنصوص */
     h1, h2, h3, h4, h5, h6, label, p, span {{
         color: {current_theme_cfg["text"]} !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
@@ -134,7 +134,7 @@ st.markdown(f"""
     h2 {{ color: {current_theme_cfg["accent"]} !important; font-size: 1.6rem !important; border-bottom: 2px solid {current_theme_cfg["border"]}; padding-bottom: 8px; margin-top: 15px; }}
     h3 {{ font-size: 1.25rem !important; }}
 
-    /* 5. كروت المؤشرات المخصصة (KPI Cards) */
+    /* كروت المؤشرات KPI */
     .kpi-card {{
         background: {current_theme_cfg["card_bg"]};
         border: 1px solid {current_theme_cfg["border"]};
@@ -165,7 +165,7 @@ st.markdown(f"""
         margin: 0 !important;
     }}
 
-    /* 6. تصميم أزرار النظام */
+    /* الأزرار */
     .stButton>button {{
         background: linear-gradient(135deg, {current_theme_cfg["accent"]} 0%, #aa7c11 100%) !important;
         color: #0d1117 !important;
@@ -183,7 +183,7 @@ st.markdown(f"""
         transform: translateY(-1px);
     }}
 
-    /* 7. توحيد الحقول والمدخلات والجداول */
+    /* المدخلات والجداول */
     .stTextInput>div>div>input, .stSelectbox>div>div, .stNumberInput>div>div>input, .stTextArea>div>div>textarea {{
         background-color: {current_theme_cfg["sidebar_bg"]} !important;
         color: {current_theme_cfg["text"]} !important;
@@ -384,7 +384,7 @@ def generate_payroll_pdf(df_payroll):
     return pdf_file_path
 
 # ---------------------------------------------------------
-# 4. نظام الجلسة وتثبيت الدخول عبر URL
+# 4. إدارة الجلسة والدخول
 # ---------------------------------------------------------
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
@@ -459,7 +459,6 @@ username_str = current_user[0] if current_user else ""
 
 allowed_menu = ["الملف الشخصي"]
 
-# بناء القائمة بناءً على الصلاحية
 if user_role in ["ادمن", "مطور"]:
     allowed_menu = [
         "الرئيسية (Dashboard)",
@@ -487,9 +486,121 @@ elif user_role == "عقارات":
 if user_role == "مطور" or username_str == "developer":
     allowed_menu.append("إعدادات الثيمات (للمطور)")
 
-menu = st.sidebar.radio("الأقسان المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
+menu = st.sidebar.radio("الأقسام المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
 st.sidebar.markdown("---")
 
 if st.sidebar.button("تسجيل الخروج", key="logout_btn", use_container_width=True):
     if "session" in st.query_params:
-        token_to_del = st.
+        token_to_del = st.query_params["session"]
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM active_sessions WHERE token = ?", (token_to_del,))
+            conn.commit()
+        st.query_params.clear()
+        
+    st.session_state['logged_in'] = False
+    st.session_state['user_id'] = None
+    st.session_state['user_role'] = None
+    st.rerun()
+
+# ---------------------------------------------------------
+# 5. Dashboard (اللوحة الرئيسية)
+# ---------------------------------------------------------
+if menu == "الرئيسية (Dashboard)":
+    st.header("لوحة التحكم والأداء العام")
+    
+    with get_connection() as conn:
+        df_fin = pd.read_sql_query("SELECT * FROM finance", conn)
+        df_prop = pd.read_sql_query("SELECT * FROM properties", conn)
+        df_hr = pd.read_sql_query("SELECT * FROM hr", conn)
+    
+    total_rev = df_fin[df_fin['type'] == 'إيراد']['amount'].sum() if not df_fin.empty else 0
+    total_exp = df_fin[df_fin['type'] == 'مصروف']['amount'].sum() if not df_fin.empty else 0
+    net_profit = total_rev - total_exp
+    total_props = len(df_prop)
+    total_employees = len(df_hr)
+    
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">إجمالي الإيرادات</span>
+                <h3 class="kpi-value">{total_rev:,.2f} ج.م</h3>
+            </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">إجمالي المصروفات</span>
+                <h3 class="kpi-value">{total_exp:,.2f} ج.م</h3>
+            </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">صافي الأرباح</span>
+                <h3 class="kpi-value">{net_profit:,.2f} ج.م</h3>
+            </div>
+        """, unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">العقارات / القوة البشرية</span>
+                <h3 class="kpi-value">{total_props} عقار / {total_employees} فرد</h3>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_chart1, col_chart2 = st.columns(2)
+    with col_chart1:
+        st.subheader("توزيع التدفقات المالية")
+        if not df_fin.empty:
+            fig1 = px.pie(
+                df_fin, 
+                values='amount', 
+                names='type', 
+                hole=0.5, 
+                color_discrete_sequence=['#d4af37', '#e74c3c']
+            )
+            fig1.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                font=dict(color=current_theme_cfg["text"]),
+                legend=dict(orientation="h", y=-0.1)
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("لا توجد بيانات مالية مسجلة بعد.")
+            
+    with col_chart2:
+        st.subheader("حالة المخزون العقاري")
+        if not df_prop.empty:
+            fig2 = px.pie(
+                df_prop, 
+                names='status', 
+                hole=0.5, 
+                color_discrete_sequence=['#2ecc71', '#f39c12']
+            )
+            fig2.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                font=dict(color=current_theme_cfg["text"]),
+                legend=dict(orientation="h", y=-0.1)
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("لا توجد عقارات مسجلة بالمخزون بعد.")
+
+# ---------------------------------------------------------
+# 6. قسم الموارد البشرية (HR)
+# ---------------------------------------------------------
+elif menu == "الموارد البشرية (HR)":
+    st.header("قسم الموارد البشرية والعمالة")
+    
+    tab1, tab2, tab3 = st.tabs(["إضافة جديد", "عرض وحذف السجلات", "تعديل بيانات"])
+    
+    with tab1:
+        with st.form("hr_form"):
+            col_a, col_b = st.columns(2)
+            
