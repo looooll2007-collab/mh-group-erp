@@ -1,555 +1,1119 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import io
+import plotly.express as px
+import os
+import datetime
+import uuid
+
+# مكتبة إنشاء ملفات PDF
+try:
+    from fpdf import FPDF
+except ImportError:
+    st.error("يرجى تثبيت مكتبة fpdf عبر الأمر: pip install fpdf2")
 
 # ---------------------------------------------------------
-# 1. إعدادات الصفحة والتصميم CSS المعدل
+# 1. إعدادات الصفحة والتصميم (Luxury Theme & CSS)
 # ---------------------------------------------------------
-st.set_page_config(
-    page_title="MH GROUP ERP",
-    page_icon="🏢",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="MH GROUP ERP", layout="wide", page_icon="🏢")
 
-custom_css = """
-<style>
-/* اتجاه الصفحة والألوان الأساسية */
-html, body, [data-testid="stAppViewContainer"] {
-    direction: rtl;
-    text-align: right;
-    background-color: #0d1117 !important;
-    color: #c9d1d9 !important;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-}
-
-[data-testid="stHeader"] {
-    background-color: transparent !important;
-}
-
-[data-testid="stSidebar"] {
-    background-color: #161b22 !important;
-    border-left: 1px solid #30363d !important;
-}
-
-/* الأزرار الذهبية */
-.stButton > button {
-    background-color: #d4af37 !important;
-    color: #0d1117 !important;
-    font-weight: bold !important;
-    border-radius: 8px !important;
-    border: none !important;
-    padding: 0.5rem 1rem !important;
-    transition: all 0.3s ease !important;
-    width: 100% !important;
-}
-
-.stButton > button:hover {
-    background-color: #f1c40f !important;
-    box-shadow: 0 0 10px rgba(212, 175, 55, 0.4) !important;
-}
-
-/* إصلاح الإدخالات ومنع كلمة visibili */
-div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
-    background-color: #161b22 !important;
-    border: 1px solid #30363d !important;
-    border-radius: 8px !important;
-}
-
-div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea {
-    color: #ffffff !important;
-    background-color: transparent !important;
-}
-
-/* إخفاء وتجميل أيقونة إظهار كلمة المرور */
-button[aria-label="Show password"], 
-button[aria-label="Hide password"],
-[data-aria-label="Show password"] {
-    color: #8b949e !important;
-    background: transparent !important;
-}
-
-button[aria-label="Show password"] *, 
-button[aria-label="Hide password"] * {
-    font-size: 0 !important;
-}
-
-/* جداول البيانات */
-[data-testid="stDataFrame"] {
-    background-color: #161b22 !important;
-    border: 1px solid #30363d !important;
-    border-radius: 10px !important;
-}
-
-h1, h2, h3, h4 {
-    color: #ffffff !important;
-    font-weight: 700 !important;
-}
-</style>
-"""
-st.markdown(custom_css, unsafe_allow_html=True)
+st.markdown("""
+    <style>
+    .stApp { background-color: #0d1117; color: #e6edf3; }
+    h1, h2, h3 { color: #d4af37 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: bold; }
+    h1 { font-size: 2.2rem !important; }
+    h2 { font-size: 1.8rem !important; border-bottom: 2px solid #d4af37; padding-bottom: 8px; }
+    h3 { font-size: 1.4rem !important; }
+    section[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
+    section[data-testid="stSidebar"] .stRadio label { font-size: 1.15rem !important; font-weight: 600 !important; color: #c9d1d9 !important; padding: 5px 0; }
+    div[data-testid="stMetric"] { background: linear-gradient(135deg, #1f242d 0%, #161b22 100%); border: 1px solid #d4af37; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4); }
+    div[data-testid="stMetricValue"] { color: #ffd700 !important; font-size: 1.8rem !important; }
+    .stButton>button { background: linear-gradient(45deg, #d4af37, #aa7c11) !important; color: #000000 !important; font-weight: bold !important; font-size: 1rem !important; border-radius: 8px !important; border: none !important; transition: all 0.3s ease; }
+    .stButton>button:hover { background: linear-gradient(45deg, #ffd700, #c59b27) !important; box-shadow: 0 0 10px rgba(212, 175, 55, 0.6); }
+    </style>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. إعداد وقواعد البيانات SQLite
+# 2. إدارة قاعدة البيانات
 # ---------------------------------------------------------
 DB_FILE = "mh_group_erp.db"
 
 def get_connection():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return sqlite3.connect(DB_FILE)
 
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 1. جدول المستخدمين والصلاحيات
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        role TEXT NOT NULL,
-        email TEXT,
-        status TEXT DEFAULT 'نشط'
-    )
-    """)
+    # جدول المستخدمين
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            full_name TEXT,
+            email TEXT,
+            phone TEXT,
+            avatar_path TEXT,
+            role TEXT DEFAULT 'ادمن'
+        )
+    ''')
     
-    # 2. جدول الموظفين والمرتبات والسلف
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS employees (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        emp_code TEXT UNIQUE,
-        full_name TEXT NOT NULL,
-        department TEXT,
-        position TEXT,
-        base_salary REAL,
-        advances REAL DEFAULT 0,
-        deductions REAL DEFAULT 0,
-        bonuses REAL DEFAULT 0
-    )
-    """)
-    
-    # 3. جدول أسهم المستثمرين والأرباح
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS investors (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        investor_code TEXT UNIQUE,
-        full_name TEXT NOT NULL,
-        phone TEXT,
-        shares_count INTEGER DEFAULT 0,
-        share_value REAL DEFAULT 0,
-        total_investment REAL DEFAULT 0,
-        join_date DATE DEFAULT CURRENT_DATE
-    )
-    """)
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'ادمن'")
+    except sqlite3.OperationalError:
+        pass
 
-    # 4. جدول توزيع الأرباح على المستثمرين
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS profit_distributions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        investor_id INTEGER,
-        payout_date DATE DEFAULT CURRENT_DATE,
-        amount_paid REAL,
-        notes TEXT,
-        FOREIGN KEY(investor_id) REFERENCES investors(id)
-    )
-    """)
-    
-    # 5. جدول المالية والتدفقات
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS financial_transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        trans_date DATE DEFAULT CURRENT_DATE,
-        trans_type TEXT,
-        category TEXT,
-        amount REAL,
-        description TEXT
-    )
-    """)
-    
-    # 6. جدول المخزون العقاري
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS real_estate_inventory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        unit_code TEXT UNIQUE,
-        project_name TEXT,
-        unit_type TEXT,
-        price REAL,
-        status TEXT DEFAULT 'متاحة'
-    )
-    """)
-
-    # 7. جدول المستندات
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS documents (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        doc_name TEXT,
-        file_type TEXT,
-        uploaded_by TEXT,
-        upload_date DATE DEFAULT CURRENT_DATE
-    )
-    """)
-    
-    # إضافة حساب المسؤول الرئيسي افتراضياً
-    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+    cursor.execute("SELECT * FROM users WHERE id = 1")
     if not cursor.fetchone():
-        cursor.execute("INSERT INTO users (username, password, role, email) VALUES ('admin', '123456', 'مدير النظام', 'admin@mhgroup.com')")
-        
+        cursor.execute('''
+            INSERT INTO users (id, username, password, full_name, email, phone, avatar_path, role)
+            VALUES (1, 'admin', 'mh123456', 'مدير النظام - MH GROUP', 'admin@mhgroup.com', '01000000000', '', 'ادمن')
+        ''')
+
+    # جدول الجلسات النشطة
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS active_sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER,
+            role TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # جدول HR
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS hr (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_code TEXT UNIQUE,
+            name TEXT,
+            type TEXT,
+            worker_category TEXT,
+            grade TEXT,
+            work_hours REAL,
+            hourly_rate REAL,
+            daily_rate REAL,
+            workers_count INTEGER DEFAULT 0
+        )
+    ''')
+
+    for col in ["emp_code TEXT", "worker_category TEXT", "daily_rate REAL"]:
+        try:
+            cursor.execute(f"ALTER TABLE hr ADD COLUMN {col}")
+        except sqlite3.OperationalError:
+            pass
+
+    # جدول المالية
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS finance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            amount REAL,
+            category TEXT,
+            description TEXT
+        )
+    ''')
+
+    # جدول السلف
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS advances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_code TEXT,
+            person_name TEXT,
+            amount REAL,
+            date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    try:
+        cursor.execute("ALTER TABLE advances ADD COLUMN emp_code TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    # جدول العقارات
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS properties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prop_code TEXT UNIQUE,
+            prop_type TEXT,
+            base_price REAL,
+            expenses REAL,
+            total_price REAL,
+            selling_price REAL DEFAULT 0,
+            status TEXT DEFAULT 'متاح'
+        )
+    ''')
+
+    # جدول الـ IT
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS it_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_name TEXT,
+            work_hours REAL,
+            hourly_rate REAL
+        )
+    ''')
+
+    # جدول المستثمرين
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS investors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            investor_name TEXT,
+            prop_code TEXT,
+            share_percentage REAL,
+            invested_amount REAL
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
 init_db()
 
 # ---------------------------------------------------------
-# 3. إدارة جلسة التسجيل
+# 3. دالة إنشاء ملف PDF للأجور
 # ---------------------------------------------------------
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "username" not in st.session_state:
-    st.session_state.username = ""
-if "role" not in st.session_state:
-    st.session_state.role = ""
+def generate_payroll_pdf(df_payroll):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(190, 10, txt="MH GROUP ERP - Payroll Summary Report", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(25, 8, "Code", 1)
+    pdf.cell(45, 8, "Name", 1)
+    pdf.cell(30, 8, "Category", 1)
+    pdf.cell(25, 8, "Daily Rate", 1)
+    pdf.cell(25, 8, "Advances", 1)
+    pdf.cell(30, 8, "Net Salary", 1)
+    pdf.ln()
+
+    pdf.set_font("Arial", '', 9)
+    for idx, row in df_payroll.iterrows():
+        def safe_txt(val):
+            s = str(val if val is not None else '')
+            return s.encode('latin-1', 'replace').decode('latin-1')
+
+        pdf.cell(25, 8, safe_txt(row['الكود الوظيفي']), 1)
+        pdf.cell(45, 8, safe_txt(row['اسم الموظف/المورد'])[:20], 1)
+        pdf.cell(30, 8, safe_txt(row['نوع العامل']), 1)
+        pdf.cell(25, 8, f"{float(row['اليومية'] or 0):.1f}", 1)
+        pdf.cell(25, 8, f"{float(row['إجمالي السلف'] or 0):.1f}", 1)
+        pdf.cell(30, 8, f"{float(row['الصافي المستحق'] or 0):.1f}", 1)
+        pdf.ln()
+        
+    pdf_file_path = "payroll_report.pdf"
+    pdf.output(pdf_file_path)
+    return pdf_file_path
 
 # ---------------------------------------------------------
-# 4. صفحة تسجيل الدخول
+# 4. نظام الجلسة وتثبيت الدخول عبر URL (Query Params)
 # ---------------------------------------------------------
-def login_page():
-    st.markdown("<h1 style='text-align: center;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #8b949e !important;'>نظام إدارة الموارد المؤسسية (ERP)</h3>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+if 'user_id' not in st.session_state:
+    st.session_state['user_id'] = None
+if 'user_role' not in st.session_state:
+    st.session_state['user_role'] = None
+
+query_params = st.query_params
+if "session" in query_params and not st.session_state['logged_in']:
+    session_token = query_params["session"]
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, role FROM active_sessions WHERE token = ?", (session_token,))
+    sess_data = cursor.fetchone()
+    conn.close()
+    
+    if sess_data:
+        st.session_state['logged_in'] = True
+        st.session_state['user_id'] = sess_data[0]
+        st.session_state['user_role'] = sess_data[1]
+
+def login():
+    st.markdown("<h1 style='text-align: center; color: #ffd700;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        username_input = st.text_input("اسم المستخدم أو البريد الإلكتروني")
-        password_input = st.text_input("كلمة المرور", type="password")
-        
-        if st.button("تسجيل الدخول"):
-            u = username_input.strip()
-            p = password_input.strip()
-            
+        username_input = st.text_input("اسم المستخدم", key="login_username")
+        password_input = st.text_input("كلمة المرور", type="password", key="login_password")
+        if st.button("تسجيل الدخول", use_container_width=True, key="login_btn"):
             conn = get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE (username=? OR email=?) AND password=?", (u, u, p))
+            cursor.execute("SELECT id, role FROM users WHERE username = ? AND password = ?", (username_input, password_input))
             user = cursor.fetchone()
-            conn.close()
             
             if user:
-                st.session_state.authenticated = True
-                st.session_state.username = user["username"]
-                st.session_state.role = user["role"]
-                st.success("تم تسجيل الدخول بنجاح!")
+                token = str(uuid.uuid4())
+                cursor.execute("INSERT INTO active_sessions (token, user_id, role) VALUES (?, ?, ?)", (token, user[0], user[1]))
+                conn.commit()
+                conn.close()
+                
+                st.session_state['logged_in'] = True
+                st.session_state['user_id'] = user[0]
+                st.session_state['user_role'] = user[1]
+                
+                st.query_params["session"] = token
                 st.rerun()
             else:
+                conn.close()
                 st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
 
-# ---------------------------------------------------------
-# 5. النظام الرئيسي والتوجيه بين الأقسام
-# ---------------------------------------------------------
-def main_app():
-    st.sidebar.markdown(f"### 🏢 MH GROUP ERP")
-    st.sidebar.write(f"مرحباً بك: **{st.session_state.username}**")
-    st.sidebar.caption(f"الصلاحية: {st.session_state.role}")
-    st.sidebar.markdown("---")
-    
-    menu = st.sidebar.radio("القائمة الرئيسية", [
-        "لوحة التحكم (Dashboard)",
-        "أسهم المستثمرين والأرباح",
-        "الموارد البشرية (HR)",
-        "الحسابات والمالية",
-        "حالة المخزون العقاري",
+if not st.session_state['logged_in']:
+    login()
+    st.stop()
+
+conn = get_connection()
+cursor = conn.cursor()
+cursor.execute("SELECT full_name, avatar_path, role FROM users WHERE id = ?", (st.session_state['user_id'],))
+current_user = cursor.fetchone()
+conn.close()
+
+st.sidebar.title("🏢 MH GROUP ERP")
+if current_user:
+    if current_user[1] and os.path.exists(current_user[1]):
+        st.sidebar.image(current_user[1], width=100)
+    st.sidebar.markdown(f"**أهلاً بك، {current_user[0]}**")
+    st.sidebar.caption(f"الصلاحية الحالية: `{current_user[2]}`")
+
+st.sidebar.markdown("---")
+
+user_role = st.session_state['user_role']
+allowed_menu = ["الملف الشخصي"]
+
+if user_role == "ادمن":
+    allowed_menu = [
+        "الرئيسية (Dashboard)",
+        "الملف الشخصي",
         "إدارة المستخدمين والصلاحيات",
-        "مركز رفع المستندات",
-        "الملف الشخصي"
+        "رفع المستندات",
+        "الموارد البشرية (HR)",
+        "المالية والأجور",
+        "المخزون العقاري",
+        "قسم تكنولوجيا المعلومات (IT)",
+        "أسهم المستثمرين"
+    ]
+elif user_role == "HR":
+    allowed_menu.insert(0, "الموارد البشرية (HR)")
+elif user_role == "محاسب":
+    allowed_menu.insert(0, "المالية والأجور")
+    allowed_menu.append("رفع المستندات")
+elif user_role == "IT":
+    allowed_menu.insert(0, "قسم تكنولوجيا المعلومات (IT)")
+elif user_role == "عقارات":
+    allowed_menu.insert(0, "المخزون العقاري")
+    allowed_menu.append("أسهم المستثمرين")
+
+menu = st.sidebar.radio("📋 الأقسام المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
+
+if st.sidebar.button("🚪 تسجيل الخروج", key="logout_btn"):
+    if "session" in st.query_params:
+        token_to_del = st.query_params["session"]
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM active_sessions WHERE token = ?", (token_to_del,))
+        conn.commit()
+        conn.close()
+        st.query_params.clear()
+        
+    st.session_state['logged_in'] = False
+    st.session_state['user_id'] = None
+    st.session_state['user_role'] = None
+    st.rerun()
+
+# ---------------------------------------------------------
+# 5. Dashboard
+# ---------------------------------------------------------
+if menu == "الرئيسية (Dashboard)":
+    st.header("📊 لوحة التحكم والأداء العام")
+    
+    conn = get_connection()
+    df_fin = pd.read_sql_query("SELECT * FROM finance", conn)
+    df_prop = pd.read_sql_query("SELECT * FROM properties", conn)
+    df_hr = pd.read_sql_query("SELECT * FROM hr", conn)
+    conn.close()
+    
+    total_rev = df_fin[df_fin['type'] == 'إيراد']['amount'].sum() if not df_fin.empty else 0
+    total_exp = df_fin[df_fin['type'] == 'مصروف']['amount'].sum() if not df_fin.empty else 0
+    net_profit = total_rev - total_exp
+    total_props = len(df_prop)
+    total_employees = len(df_hr)
+    
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("إجمالي الإيرادات", f"{total_rev:,.2f} ج.م")
+    c2.metric("إجمالي المصروفات", f"{total_exp:,.2f} ج.م")
+    c3.metric("صافي الأرباح", f"{net_profit:,.2f} ج.م")
+    c4.metric("العقارات / القوة البشرية", f"{total_props} عقار / {total_employees} فرد")
+    
+    st.divider()
+    
+    col_chart1, col_chart2 = st.columns(2)
+    with col_chart1:
+        st.subheader("📈 توزيع التدفقات المالية")
+        if not df_fin.empty:
+            fig1 = px.pie(df_fin, values='amount', names='type', title="نسب الإيرادات والمصروفات", hole=0.4, color_discrete_sequence=['#d4af37', '#e74c3c'])
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("لا توجد بيانات مالية مسجلة بعد.")
+            
+    with col_chart2:
+        st.subheader("🏠 حالة المخزون العقاري")
+        if not df_prop.empty:
+            fig2 = px.pie(df_prop, names='status', title="حالة العقارات", hole=0.4, color_discrete_sequence=['#2ecc71', '#f39c12'])
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("لا توجد عقارات مسجلة بالمخزون بعد.")
+
+# ---------------------------------------------------------
+# 6. قسم الموارد البشرية (HR)
+# ---------------------------------------------------------
+elif menu == "الموارد البشرية (HR)":
+    st.header("👥 قسم الموارد البشرية والعمالة")
+    
+    tab1, tab2, tab3 = st.tabs(["➕ إضافة جديد", "📋 عرض وحذف السجلات", "✏️ تعديل بيانات"])
+    
+    with tab1:
+        with st.form("hr_form"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                emp_code = st.text_input("الكود الوظيفي (مثال: EMP-101)")
+                name = st.text_input("الاسم الكامل")
+                entry_type = st.selectbox("نوع القيد", ["موظف", "مورد", "عامل عادية"])
+                worker_category = st.selectbox("نوع العامل / التخصص", ["نحات", "مبيض", "عامل", "سباك", "كهربائي", "إداري", "أخرى"])
+            with col_b:
+                grade = st.text_input("الدرجة الوظيفية / الوصف")
+                daily_rate = st.number_input("اليومية (ج.م)", min_value=0.0, step=50.0)
+                hourly_rate = st.number_input("سعر الساعة (ج.م)", min_value=0.0, step=5.0)
+                work_hours = st.number_input("ساعات العمل المسجلة", min_value=0.0, step=0.5)
+                workers_count = st.number_input("عدد العمال التابعين (للموردين)", min_value=0, step=1)
+            
+            submit = st.form_submit_button("حفظ البيانات")
+            if submit:
+                conn = get_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO hr (emp_code, name, type, worker_category, grade, work_hours, hourly_rate, daily_rate, workers_count)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (emp_code, name, entry_type, worker_category, grade, work_hours, hourly_rate, daily_rate, workers_count))
+                    conn.commit()
+                    st.success("تم الحفظ بنجاح!")
+                except Exception as e:
+                    st.error("الكود الوظيفي مكرر أو حدث خطأ!")
+                finally:
+                    conn.close()
+                st.rerun()
+
+    with tab2:
+        conn = get_connection()
+        df_hr = pd.read_sql_query("SELECT id, emp_code as 'الكود الوظيفي', name as 'الاسم', type as 'النوع', worker_category as 'نوع العامل', daily_rate as 'اليومية', hourly_rate as 'سعر الساعة', work_hours as 'ساعات العمل' FROM hr", conn)
+        st.dataframe(df_hr, use_container_width=True)
+        
+        if not df_hr.empty:
+            st.subheader("🗑️ حذف سجل من HR")
+            hr_to_delete = st.selectbox("اختر السجل المراد حذفه (ID)", df_hr['id'].tolist(), key="hr_del_select")
+            if st.button("حذف السجل المحدد", key="hr_del_btn"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM hr WHERE id = ?", (hr_to_delete,))
+                conn.commit()
+                st.success("تم الحذف!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+    with tab3:
+        conn = get_connection()
+        df_hr_raw = pd.read_sql_query("SELECT * FROM hr", conn)
+        if not df_hr_raw.empty:
+            selected_hr_id = st.selectbox("اختر للتعديل", df_hr_raw['id'].tolist(), key="hr_edit_select")
+            hr_row = df_hr_raw[df_hr_raw['id'] == selected_hr_id].iloc[0]
+            
+            with st.form("hr_edit_form"):
+                e_code = st.text_input("الكود الوظيفي", value=str(hr_row['emp_code'] or ''))
+                e_name = st.text_input("الاسم", value=str(hr_row['name']))
+                e_cat = st.selectbox("نوع العامل", ["نحات", "مبيض", "عامل", "سباك", "كهربائي", "إداري", "أخرى"], index=0)
+                e_daily = st.number_input("اليومية", value=float(hr_row['daily_rate'] or 0.0))
+                e_hours = st.number_input("ساعات العمل", value=float(hr_row['work_hours'] or 0.0))
+                e_rate = st.number_input("سعر الساعة", value=float(hr_row['hourly_rate'] or 0.0))
+                
+                edit_sub = st.form_submit_button("حفظ التعديل")
+                if edit_sub:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE hr SET emp_code=?, name=?, worker_category=?, daily_rate=?, work_hours=?, hourly_rate=? WHERE id=?
+                    """, (e_code, e_name, e_cat, e_daily, e_hours, e_rate, selected_hr_id))
+                    conn.commit()
+                    st.success("تم التعديل بنجاح!")
+                    conn.close()
+                    st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 7. قسم المالية والأجور (Payroll & Finance)
+# ---------------------------------------------------------
+elif menu == "المالية والأجور":
+    st.header("💰 قسم المالية وحساب الأجور والسُلف")
+    
+    tab1, tab2, tab3 = st.tabs(["📊 كشف الأجور والتصدير PDF/Excel", "💸 تسجيل السُلف", "🧾 الخزينة والمعاملات المالية"])
+    
+    with tab1:
+        st.subheader("📑 كشف الأجور والصافي لكل العاملين")
+        conn = get_connection()
+        df_hr_all = pd.read_sql_query("SELECT * FROM hr", conn)
+        df_adv_all = pd.read_sql_query("SELECT emp_code, SUM(amount) as total_adv FROM advances GROUP BY emp_code", conn)
+        conn.close()
+        
+        if not df_hr_all.empty:
+            payroll_data = []
+            for _, emp in df_hr_all.iterrows():
+                code = emp['emp_code'] or '---'
+                name = emp['name']
+                cat = emp['worker_category'] or 'عامل'
+                daily = emp['daily_rate'] or 0.0
+                h_rate = emp['hourly_rate'] or 0.0
+                h_worked = emp['work_hours'] or 0.0
+                
+                earned = (daily) + (h_rate * h_worked)
+                adv_row = df_adv_all[df_adv_all['emp_code'] == code] if not df_adv_all.empty else pd.DataFrame()
+                adv_amt = adv_row['total_adv'].values[0] if not adv_row.empty else 0.0
+                net = earned - adv_amt
+                
+                payroll_data.append({
+                    "الكود الوظيفي": code,
+                    "اسم الموظف/المورد": name,
+                    "نوع العامل": cat,
+                    "اليومية": daily,
+                    "سعر الساعة": h_rate,
+                    "ساعات العمل": h_worked,
+                    "إجمالي المستحق": earned,
+                    "إجمالي السلف": adv_amt,
+                    "الصافي المستحق": net
+                })
+            
+            df_payroll = pd.DataFrame(payroll_data)
+            st.dataframe(df_payroll, use_container_width=True)
+            
+            st.markdown("---")
+            col_pdf1, col_pdf2 = st.columns(2)
+            
+            with col_pdf1:
+                if st.button("📥 إنشاء وتنزيل كشف الأجور PDF", key="payroll_pdf_gen_btn"):
+                    try:
+                        pdf_path = generate_payroll_pdf(df_payroll)
+                        with open(pdf_path, "rb") as f:
+                            st.download_button(
+                                label="💾 اضغط هنا لتحميل ملف الـ PDF",
+                                data=f,
+                                file_name="MH_GROUP_Payroll_Report.pdf",
+                                mime="application/pdf",
+                                key="pdf_down_action"
+                            )
+                    except Exception as e:
+                        st.error(f"حدث خطأ أثناء تصدير PDF: {e}")
+
+            with col_pdf2:
+                csv_data = df_payroll.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    label="📊 تنزيل كشف الأجور كملف Excel (عربي)",
+                    data=csv_data,
+                    file_name="MH_GROUP_Payroll_Report.csv",
+                    mime="text/csv",
+                    key="csv_down_action"
+                )
+        else:
+            st.info("لا توجد بيانات موظفين أو عمال مسجلة بعد في قسم HR.")
+
+    with tab2:
+        st.subheader("💵 تسجيل سلفة جديدة")
+        conn = get_connection()
+        df_hr_list = pd.read_sql_query("SELECT emp_code, name FROM hr", conn)
+        
+        if not df_hr_list.empty:
+            with st.form("adv_form"):
+                emp_choice = st.selectbox("اختر الموظف / العامل", df_hr_list['emp_code'] + " - " + df_hr_list['name'])
+                selected_code = emp_choice.split(" - ")[0]
+                selected_name = emp_choice.split(" - ")[1]
+                
+                adv_amount = st.number_input("مبلغ السلفة (ج.م)", min_value=0.0, step=50.0)
+                submit_adv = st.form_submit_button("تسجيل السلفة")
+                if submit_adv:
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT INTO advances (emp_code, person_name, amount) VALUES (?, ?, ?)",
+                                   (selected_code, selected_name, adv_amount))
+                    conn.commit()
+                    st.success(f"تم تسجيل سلفة بمبلغ {adv_amount} ج.م لـ {selected_name}")
+                    conn.close()
+                    st.rerun()
+                    
+            st.subheader("📜 سجل السُلف المسجلة")
+            df_adv_logs = pd.read_sql_query("SELECT id, emp_code as 'الكود', person_name as 'الاسم', amount as 'المبلغ', date_added as 'التاريخ' FROM advances", conn)
+            st.dataframe(df_adv_logs, use_container_width=True)
+            if not df_adv_logs.empty:
+                adv_del_id = st.selectbox("حذف سلفة (ID)", df_adv_logs['id'].tolist(), key="adv_del_select")
+                if st.button("حذف السلفة", key="adv_del_btn"):
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM advances WHERE id = ?", (adv_del_id,))
+                    conn.commit()
+                    st.success("تم الحذف!")
+                    conn.close()
+                    st.rerun()
+        conn.close()
+
+    with tab3:
+        st.subheader("💳 الخزينة العامة والإيرادات / المصروفات")
+        with st.form("fin_form"):
+            fin_type = st.selectbox("نوع المعاملة", ["إيراد", "مصروف"])
+            amount = st.number_input("المبلغ (ج.م)", min_value=0.0, step=100.0)
+            category = st.text_input("التصنيف (مثال: صيانة, توريدات, بيع عقار)")
+            description = st.text_area("تفاصيل المعاملة")
+            
+            submit = st.form_submit_button("تسجيل المعاملة")
+            if submit:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO finance (type, amount, category, description) VALUES (?, ?, ?, ?)",
+                               (fin_type, amount, category, description))
+                conn.commit()
+                conn.close()
+                st.success("تم تسجيل المعاملة المالية!")
+                st.rerun()
+
+        conn = get_connection()
+        df_fin = pd.read_sql_query("SELECT * FROM finance", conn)
+        st.dataframe(df_fin, use_container_width=True)
+        if not df_fin.empty:
+            fin_to_delete = st.selectbox("اختر ID معاملة لحذفها", df_fin['id'].tolist(), key="fin_del_select")
+            if st.button("حذف المعاملة المالية", key="fin_del_btn"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM finance WHERE id = ?", (fin_to_delete,))
+                conn.commit()
+                st.success("تم الحذف!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 8. قسم المخزون العقاري
+# ---------------------------------------------------------
+elif menu == "المخزون العقاري":
+    st.header("🏠 إدارة المخزون العقاري والتكاليف")
+    
+    tab1, tab2, tab3 = st.tabs(["➕ إضافة عقار جديد", "📋 قائمة العقارات وحذفها", "✏️ تعديل عقار"])
+    
+    with tab1:
+        with st.form("prop_form"):
+            prop_code = st.text_input("كود العقار")
+            prop_type = st.selectbox("نوع العقار", ["شقة", "فيلا", "محل تجاري", "أرض", "مبنى كامل"])
+            base_price = st.number_input("سعر الشراء", min_value=0.0, step=1000.0)
+            expenses = st.number_input("المصاريف والتطوير", min_value=0.0, step=500.0)
+            selling_price = st.number_input("سعر البيع المستهدف", min_value=0.0, step=1000.0)
+            status = st.selectbox("حالة العقار", ["متاح", "مباع"])
+            
+            submit = st.form_submit_button("حفظ العقار")
+            if submit:
+                total_price = base_price + expenses
+                conn = get_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO properties (prop_code, prop_type, base_price, expenses, total_price, selling_price, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (prop_code, prop_type, base_price, expenses, total_price, selling_price, status))
+                    conn.commit()
+                    st.success("تم إضافة العقار بنجاح!")
+                except Exception as e:
+                    st.error("كود العقار مكرر!")
+                finally:
+                    conn.close()
+                st.rerun()
+
+    with tab2:
+        conn = get_connection()
+        df_prop = pd.read_sql_query("SELECT * FROM properties", conn)
+        if not df_prop.empty:
+            st.dataframe(df_prop, use_container_width=True)
+            prop_to_delete = st.selectbox("اختر كود العقار للحذف", df_prop['prop_code'].unique(), key="prop_del_select")
+            if st.button("حذف العقار المحدد", key="prop_del_btn"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM properties WHERE prop_code = ?", (prop_to_delete,))
+                cursor.execute("DELETE FROM investors WHERE prop_code = ?", (prop_to_delete,))
+                conn.commit()
+                st.success("تم حذف العقار!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+    with tab3:
+        conn = get_connection()
+        df_prop = pd.read_sql_query("SELECT * FROM properties", conn)
+        if not df_prop.empty:
+            selected_code = st.selectbox("اختر العقار للتعديل", df_prop['prop_code'].unique(), key="prop_edit_select")
+            p_row = df_prop[df_prop['prop_code'] == selected_code].iloc[0]
+            
+            with st.form("prop_edit_form"):
+                e_base = st.number_input("السعر الأساسي", value=float(p_row['base_price']))
+                e_exp = st.number_input("المصاريف", value=float(p_row['expenses']))
+                e_sell = st.number_input("سعر البيع", value=float(p_row['selling_price']))
+                e_status = st.selectbox("الحالة", ["متاح", "مباع"], index=0 if p_row['status'] == 'متاح' else 1)
+                
+                edit_prop_btn = st.form_submit_button("حفظ تعديل العقار")
+                if edit_prop_btn:
+                    e_total = e_base + e_exp
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE properties 
+                        SET base_price=?, expenses=?, total_price=?, selling_price=?, status=? 
+                        WHERE prop_code=?
+                    """, (e_base, e_exp, e_total, e_sell, e_status, selected_code))
+                    conn.commit()
+                    st.success("تم التحديث!")
+                    conn.close()
+                    st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 9. قسم تكنولوجيا المعلومات (IT)
+# ---------------------------------------------------------
+elif menu == "قسم تكنولوجيا المعلومات (IT)":
+    st.header("💻 قسم تكنولوجيا المعلومات (IT)")
+    
+    tab_it1, tab_it2 = st.tabs(["➕ تسجيل ساعات ودعم IT", "📋 سجلات IT المسجلة"])
+    
+    with tab_it1:
+        with st.form("it_form"):
+            emp_name = st.text_input("اسم المهندس / تقني الـ IT")
+            work_hours = st.number_input("عدد ساعات العمل المسجلة", min_value=0.0, step=0.5)
+            hourly_rate = st.number_input("سعر الساعة (ج.م)", min_value=0.0, step=10.0)
+            
+            submit_it = st.form_submit_button("حفظ البيانات")
+            if submit_it:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO it_logs (emp_name, work_hours, hourly_rate)
+                    VALUES (?, ?, ?)
+                """, (emp_name, work_hours, hourly_rate))
+                conn.commit()
+                conn.close()
+                st.success("تم تسجيل البيانات بنجاح!")
+                st.rerun()
+                
+    with tab_it2:
+        conn = get_connection()
+        df_it = pd.read_sql_query("SELECT id, emp_name as 'اسم المهندس', work_hours as 'ساعات العمل', hourly_rate as 'سعر الساعة', (work_hours * hourly_rate) as 'إجمالي الإستحقاق' FROM it_logs", conn)
+        st.dataframe(df_it, use_container_width=True)
+        if not df_it.empty:
+            it_to_del = st.selectbox("حذف سجل IT (ID)", df_it['id'].tolist(), key="it_del_select")
+            if st.button("حذف السجل", key="it_del_btn"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM it_logs WHERE id = ?", (it_to_del,))
+                conn.commit()
+                st.success("تم الحذف!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 10. قسم أسهم المستثمرين (لوحة تحليلات ورسومات بيانية)
+# ---------------------------------------------------------
+elif menu == "أسهم المستثمرين":
+    st.header("📈 لوحة تحليلات الشركاء ورأس المال المستثمر")
+    st.caption("نظام محاكاة الأرباح، توزيع الحصص، وتحليل عائد الاستثمار لكل عقار")
+    
+    tab_inv1, tab_inv2, tab_inv3 = st.tabs([
+        "📊 لوحة التحليلات والرسومات البيانية", 
+        "📋 جدول توزيع الحصص والأرباح", 
+        "➕ إضافة / ربط مستثمر"
     ])
     
-    if st.sidebar.button("تسجيل الخروج"):
-        st.session_state.authenticated = False
-        st.session_state.username = ""
-        st.session_state.role = ""
-        st.rerun()
-
-    st.title(f"قسم: {menu}")
-    st.markdown("---")
-
     conn = get_connection()
-
-    # --- 1. لوحة التحكم (Dashboard) ---
-    if menu == "لوحة التحكم (Dashboard)":
-        c1, c2, c3, c4 = st.columns(4)
-        
-        total_emp = pd.read_sql_query("SELECT COUNT(*) as count FROM employees", conn).iloc[0]['count']
-        total_investors = pd.read_sql_query("SELECT COUNT(*) as count FROM investors", conn).iloc[0]['count']
-        total_shares = pd.read_sql_query("SELECT SUM(shares_count) as total FROM investors", conn).iloc[0]['total'] or 0
-        total_capital = pd.read_sql_query("SELECT SUM(total_investment) as total FROM investors", conn).iloc[0]['total'] or 0
-        
-        c1.metric("عدد الموظفين", total_emp)
-        c2.metric("عدد المستثمرين", total_investors)
-        c3.metric("إجمالي الأسهم", total_shares)
-        c4.metric("رأس المال المستثمر", f"{total_capital:,.0f} ج.م")
-        
-        st.markdown("### ملخص أحدث العمليات المالية")
-        df_fin = pd.read_sql_query("SELECT trans_date as التاريخ, trans_type as النوع, category as التصنيف, amount as المبلغ, description as البيان FROM financial_transactions ORDER BY id DESC LIMIT 5", conn)
-        st.dataframe(df_fin, use_container_width=True)
-
-    # --- 2. قسم أسهم المستثمرين والأرباح ---
-    elif menu == "أسهم المستثمرين والأرباح":
-        st.subheader("إدارة المستثمرين ورأس المال والأرباح")
-        
-        tab_inv1, tab_inv2, tab_inv3 = st.tabs(["قائمة المستثمرين", "إضافة مستثمر جديد", "تسجيل توزيع أرباح"])
-        
-        with tab_inv1:
-            df_inv = pd.read_sql_query("""
-                SELECT 
-                    investor_code as كود_المستثمر,
-                    full_name as اسم_المستثمر,
-                    phone as الهاتف,
-                    shares_count as عدد_الأسهم,
-                    share_value as قيمة_السهم,
-                    total_investment as إجمالي_الاستثمار,
-                    join_date as تاريخ_الانضمام
-                FROM investors
-            """, conn)
-            st.dataframe(df_inv, use_container_width=True)
-            
-            if not df_inv.empty:
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_inv.to_excel(writer, index=False, sheet_name='Investors')
-                st.download_button("تصدير سجل المستثمرين Excel 📊", data=buffer.getvalue(), file_name="investors_report.xlsx", mime="application/vnd.ms-excel")
-
-        with tab_inv2:
-            with st.form("add_investor_form"):
-                inv_code = st.text_input("كود المستثمر (مثال: INV-01)")
-                inv_name = st.text_input("اسم المستثمر بالكامل")
-                inv_phone = st.text_input("رقم الهاتف")
-                shares_cnt = st.number_input("عدد الأسهم", min_value=1, value=1, step=1)
-                sh_val = st.number_input("قيمة السهم الواحد (ج.م)", min_value=0.0, value=10000.0)
-                
-                total_inv_calc = shares_cnt * sh_val
-                st.info(f"إجمالي قيمة الاستثمار المحسوبة: **{total_inv_calc:,.2f} ج.م**")
-                
-                if st.form_submit_button("حفظ المستثمر"):
-                    if inv_code and inv_name:
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("""
-                                INSERT INTO investors (investor_code, full_name, phone, shares_count, share_value, total_investment)
-                                VALUES (?, ?, ?, ?, ?, ?)
-                            """, (inv_code, inv_name, inv_phone, shares_cnt, sh_val, total_inv_calc))
-                            
-                            # تسجيل الحركة كمصدر إيراد مالي
-                            cursor.execute("""
-                                INSERT INTO financial_transactions (trans_type, category, amount, description)
-                                VALUES ('إيراد', 'رأس مال مستثمر', ?, ?)
-                            """, (total_inv_calc, f"استثمار جديد للمستثمر {inv_name} ({shares_cnt} سهم)"))
-                            
-                            conn.commit()
-                            st.success("تم تسجيل المستثمر وإضافة المبلغ للمالية بنجاح!")
-                            st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("كود المستثمر مسجل مسبقاً!")
-                    else:
-                        st.warning("يرجى إدخال كافة البيانات الأساسية")
-
-        with tab_inv3:
-            st.markdown("#### تسجيل صرف أرباح لمستثمر")
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, full_name, investor_code FROM investors")
-            all_invs = cursor.fetchall()
-            
-            if all_invs:
-                inv_options = {f"{inv['full_name']} ({inv['investor_code']})": inv['id'] for inv in all_invs}
-                selected_inv = st.selectbox("اختر المستثمر", list(inv_options.keys()))
-                payout_amt = st.number_input("مبلغ الأرباح الموزعة (ج.م)", min_value=0.0)
-                payout_notes = st.text_input("ملاحظات / الربع السنوي")
-                
-                if st.button("تسجيل صرف الأرباح"):
-                    if payout_amt > 0:
-                        inv_id = inv_options[selected_inv]
-                        cursor.execute("INSERT INTO profit_distributions (investor_id, amount_paid, notes) VALUES (?,?,?)", (inv_id, payout_amt, payout_notes))
-                        
-                        # تسجيل الخصم المالي في الحسابات
-                        cursor.execute("INSERT INTO financial_transactions (trans_type, category, amount, description) VALUES ('مصروف', 'توزيع أرباح مستثمرين', ?, ?)", (payout_amt, f"صرف أرباح للمستثمر {selected_inv} - {payout_notes}"))
-                        
-                        conn.commit()
-                        st.success("تم تسجيل توزيع الأرباح وخصمها من الحسابات المالية!")
-                        st.rerun()
-            else:
-                st.info("لا يوجد مستثمرون مسجلون حالياً")
-
-            st.markdown("---")
-            st.markdown("#### سجل توزيع الأرباح السابق")
-            df_payouts = pd.read_sql_query("""
-                SELECT 
-                    i.full_name as اسم_المستثمر,
-                    p.payout_date as تاريخ_الصرف,
-                    p.amount_paid as المبلغ_المدفوع,
-                    p.notes as ملاحظات
-                FROM profit_distributions p
-                JOIN investors i ON p.investor_id = i.id
-                ORDER BY p.id DESC
-            """, conn)
-            st.dataframe(df_payouts, use_container_width=True)
-
-    # --- 3. الموارد البشرية (HR) ---
-    elif menu == "الموارد البشرية (HR)":
-        st.subheader("إدارة الموظفين والرواتب والسُلف")
-        
-        tab1, tab2 = st.tabs(["قائمة الموظفين والرواتب", "إضافة موظف جديد"])
-        
-        with tab1:
-            df_emp = pd.read_sql_query("SELECT emp_code as الكود, full_name as الاسم, department as القسم, position as الوظيفة, base_salary as الراتب_الأساسي, bonuses as المكافآت, deductions as الخصومات, advances as السُلف FROM employees", conn)
-            st.dataframe(df_emp, use_container_width=True)
-            
-            if not df_emp.empty:
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_emp.to_excel(writer, index=False, sheet_name='Employees')
-                st.download_button("تصدير تقرير الموظفين Excel 📊", data=buffer.getvalue(), file_name="employees_report.xlsx", mime="application/vnd.ms-excel")
-
-        with tab2:
-            with st.form("add_emp_form"):
-                code = st.text_input("كود الموظف")
-                name = st.text_input("الاسم بالكامل")
-                dept = st.text_input("القسم")
-                pos = st.text_input("المسمى الوظيفي")
-                salary = st.number_input("الراتب الأساسي", min_value=0.0)
-                
-                if st.form_submit_button("حفظ الموظف"):
-                    if code and name:
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("INSERT INTO employees (emp_code, full_name, department, position, base_salary) VALUES (?,?,?,?,?)", (code, name, dept, pos, salary))
-                            conn.commit()
-                            st.success("تم إضافة الموظف بنجاح!")
-                            st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("كود الموظف مسجل مسبقاً!")
-                    else:
-                        st.warning("يرجى ملء كافة البيانات الأساسية")
-
-    # --- 4. الحسابات والمالية ---
-    elif menu == "الحسابات والمالية":
-        st.subheader("إدارة الحركة المالية والتسجيل")
-        
-        col_f1, col_f2 = st.columns([1, 2])
-        
-        with col_f1:
-            st.markdown("#### إضافة قيد جديد")
-            t_type = st.selectbox("نوع الحركة", ["إيراد", "مصروف"])
-            cat = st.text_input("التصنيف (مثال: مبيعات, صيانة, رواتب)")
-            amt = st.number_input("المبلغ (ج.م)", min_value=0.0)
-            desc = st.text_area("البيان / الوصف")
-            
-            if st.button("تسجيل القيد"):
-                if amt > 0:
-                    cursor = conn.cursor()
-                    cursor.execute("INSERT INTO financial_transactions (trans_type, category, amount, description) VALUES (?,?,?,?)", (t_type, cat, amt, desc))
-                    conn.commit()
-                    st.success("تم تسجيل القيد بنجاح!")
-                    st.rerun()
-                else:
-                    st.warning("يرجى إدخال مبلغ صحيح")
-                    
-        with col_f2:
-            st.markdown("#### سجل الحركات المالية")
-            df_trans = pd.read_sql_query("SELECT id as الرقم, trans_date as التاريخ, trans_type as النوع, category as التصنيف, amount as المبلغ, description as الوصف FROM financial_transactions ORDER BY id DESC", conn)
-            st.dataframe(df_trans, use_container_width=True)
-
-    # --- 5. حالة المخزون العقاري ---
-    elif menu == "حالة المخزون العقاري":
-        st.subheader("إدارة الوحدات والعقارات")
-        
-        t_u1, t_u2 = st.tabs(["سجل الوحدات العقارية", "إضافة وحدة جديدة"])
-        
-        with t_u1:
-            df_units = pd.read_sql_query("SELECT unit_code as كود_الوحدة, project_name as اسم_المشروع, unit_type as النوع, price as السعر, status as الحالة FROM real_estate_inventory", conn)
-            st.dataframe(df_units, use_container_width=True)
-            
-        with t_u2:
-            with st.form("add_unit_form"):
-                u_code = st.text_input("كود الوحدة")
-                p_name = st.text_input("اسم المشروع")
-                u_type = st.selectbox("نوع الوحدة", ["سكني", "تجاري", "إداري", "أرض"])
-                price = st.number_input("سعر الوحدة", min_value=0.0)
-                status = st.selectbox("الحالة", ["متاحة", "محجوزة", "تم البيع"])
-                
-                if st.form_submit_button("حفظ الوحدة"):
-                    if u_code and p_name:
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("INSERT INTO real_estate_inventory (unit_code, project_name, unit_type, price, status) VALUES (?,?,?,?,?)", (u_code, p_name, u_type, price, status))
-                            conn.commit()
-                            st.success("تم حفظ الوحدة بنجاح!")
-                            st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("كود الوحدة مسجل بالفعل!")
-
-    # --- 6. إدارة المستخدمين والصلاحيات ---
-    elif menu == "إدارة المستخدمين والصلاحيات":
-        st.subheader("سجل مستخدمي النظام والصلاحيات")
-        
-        df_users = pd.read_sql_query("SELECT id, username as اسم_المستخدم, role as الصلاحية, email as البريد_الإلكتروني, status as الحالة FROM users", conn)
-        st.dataframe(df_users, use_container_width=True)
-        
-        st.markdown("### إضافة مستخدم جديد")
-        with st.form("add_user"):
-            u_name = st.text_input("اسم المستخدم")
-            u_pass = st.text_input("كلمة المرور", type="password")
-            u_role = st.selectbox("الصلاحية", ["مدير النظام", "موارد بشرية", "محاسب", "مبيعات"])
-            u_email = st.text_input("البريد الإلكتروني")
-            
-            if st.form_submit_button("إضافة"):
-                if u_name and u_pass:
-                    cursor = conn.cursor()
-                    try:
-                        cursor.execute("INSERT INTO users (username, password, role, email) VALUES (?,?,?,?)", (u_name, u_pass, u_role, u_email))
-                        conn.commit()
-                        st.success("تمت إضافة المستخدم بنجاح!")
-                        st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("اسم المستخدم مسجل مسبقاً!")
-
-    # --- 7. مركز رفع المستندات ---
-    elif menu == "مركز رفع المستندات":
-        st.subheader("رفع وأرشفة المستندات والتقارير")
-        uploaded_file = st.file_uploader("اختر ملفاً لرفعه إلى النظام", type=["pdf", "xlsx", "docx", "jpg", "png"])
-        if uploaded_file is not None:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO documents (doc_name, file_type, uploaded_by) VALUES (?,?,?)", (uploaded_file.name, uploaded_file.type, st.session_state.username))
-            conn.commit()
-            st.success(f"تم رفع وأرشفة الملف: **{uploaded_file.name}** بنجاح!")
-            
-        st.markdown("### المستندات المؤرشفة مؤخراً")
-        df_docs = pd.read_sql_query("SELECT doc_name as اسم_الملف, file_type as النوع, uploaded_by as بواسطة, upload_date as تاريخ_الرفع FROM documents ORDER BY id DESC", conn)
-        st.dataframe(df_docs, use_container_width=True)
-
-    # --- 8. الملف الشخصي ---
-    elif menu == "الملف الشخصي":
-        st.subheader("إعدادات الحساب الشخصي")
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username=?", (st.session_state.username,))
-        curr_user = cursor.fetchone()
-        
-        if curr_user:
-            st.text_input("اسم المستخدم", value=curr_user["username"], disabled=True)
-            st.text_input("الصلاحية", value=curr_user["role"], disabled=True)
-            new_email = st.text_input("البريد الإلكتروني", value=curr_user["email"] or "")
-            new_pass = st.text_input("تحديث كلمة المرور", type="password", value=curr_user["password"])
-            
-            if st.button("تحديث البيانات"):
-                cursor.execute("UPDATE users SET email=?, password=? WHERE username=?", (new_email, new_pass, st.session_state.username))
-                conn.commit()
-                st.success("تم تحديث بياناتك بنجاح!")
-
+    query = """
+        SELECT 
+            i.id, 
+            i.investor_name, 
+            i.prop_code, 
+            p.prop_type, 
+            p.total_price as prop_cost, 
+            p.selling_price as target_sell,
+            (p.selling_price - p.total_price) as total_profit,
+            i.share_percentage, 
+            i.invested_amount
+        FROM investors i
+        LEFT JOIN properties p ON i.prop_code = p.prop_code
+    """
+    df_raw_inv = pd.read_sql_query(query, conn)
     conn.close()
 
+    if not df_raw_inv.empty:
+        def calc_profit(row):
+            profit = row['total_profit'] if pd.notnull(row['total_profit']) else 0.0
+            share = row['share_percentage'] if pd.notnull(row['share_percentage']) else 0.0
+            invested = row['invested_amount'] if pd.notnull(row['invested_amount']) and row['invested_amount'] > 0 else 1.0
+            
+            investor_profit = profit * (share / 100.0)
+            roi = (investor_profit / invested) * 100.0
+            return pd.Series([investor_profit, roi])
+
+        df_raw_inv[['investor_profit', 'roi']] = df_raw_inv.apply(calc_profit, axis=1)
+
+    with tab_inv1:
+        if not df_raw_inv.empty:
+            total_invested_all = df_raw_inv['invested_amount'].sum()
+            total_expected_profits = df_raw_inv['investor_profit'].sum()
+            avg_roi = df_raw_inv['roi'].mean()
+            active_investors_count = df_raw_inv['investor_name'].nunique()
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("إجمالي رؤوس الأموال المستثمرة", f"{total_invested_all:,.0f} ج.م")
+            m2.metric("إجمالي الأرباح المستهدفة للشركاء", f"{total_expected_profits:,.0f} ج.م")
+            m3.metric("متوسط العائد ROI %", f"{avg_roi:.1f}%")
+            m4.metric("عدد المستثمرين النشطين", f"{active_investors_count} شركاء")
+
+            st.markdown("---")
+
+            col_chart1, col_chart2 = st.columns(2)
+            
+            with col_chart1:
+                st.subheader("🥧 توزيع رؤوس الأموال حسب العقار")
+                # تم إصلاح لون الرسم البياني هنا باستبداله بـ YlOrBr_r الصريح
+                fig_pie = px.pie(
+                    df_raw_inv, 
+                    values='invested_amount', 
+                    names='prop_code', 
+                    hover_data=['investor_name'],
+                    hole=0.45,
+                    color_discrete_sequence=px.colors.sequential.YlOrBr_r
+                )
+                fig_pie.update_traces(textinfo='percent+label', marker=dict(line=dict(color='#0d1117', width=2)))
+                fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            with col_chart2:
+                st.subheader("📊 مقارنة الأرباح المتوقعة مقابل راس المال")
+                fig_bar = px.bar(
+                    df_raw_inv, 
+                    x='investor_name', 
+                    y=['invested_amount', 'investor_profit'],
+                    barmode='group',
+                    labels={'value': 'المبلغ (ج.م)', 'investor_name': 'المستثمر', 'variable': 'البيان'},
+                    color_discrete_sequence=['#415a77', '#d4af37']
+                )
+                fig_bar.data[0].name = "المبلغ المستثمر"
+                fig_bar.data[1].name = "الربح المتوقع"
+                fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+            st.subheader("🚀 ترتيب المستثمرين حسب نسبة العائد على الاستثمار (ROI %)")
+            fig_roi = px.bar(
+                df_raw_inv.sort_values(by='roi', ascending=False),
+                x='roi',
+                y='investor_name',
+                orientation='h',
+                color='roi',
+                text_auto='.1f',
+                color_continuous_scale='Blugrn',
+                labels={'roi': 'العائد %', 'investor_name': 'المستثمر'}
+            )
+            fig_roi.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
+            st.plotly_chart(fig_roi, use_container_width=True)
+
+        else:
+            st.info("لا توجد بيانات مستثمرين لعرض التحليلات البيانية. قم بإضافة مستثمرين أولاً.")
+
+    with tab_inv2:
+        st.subheader("📋 جدول تفاصيل حصص الاستثمار والأرباح")
+        
+        if not df_raw_inv.empty:
+            df_display = pd.DataFrame({
+                "ID": df_raw_inv['id'],
+                "المستثمر": df_raw_inv['investor_name'],
+                "كود العقار": df_raw_inv['prop_code'],
+                "نوع العقار": df_raw_inv['prop_type'],
+                "تكلفة العقار": df_raw_inv['prop_cost'],
+                "سعر البيع": df_raw_inv['target_sell'],
+                "ربح العقار": df_raw_inv['total_profit'],
+                "نسبة الشراكة": df_raw_inv['share_percentage'],
+                "المبلغ المستثمر": df_raw_inv['invested_amount'],
+                "حصة الربح": df_raw_inv['investor_profit'],
+                "العائد ROI %": df_raw_inv['roi']
+            })
+
+            st.dataframe(
+                df_display,
+                column_config={
+                    "ID": st.column_config.NumberColumn("ID", format="%d"),
+                    "المستثمر": st.column_config.TextColumn("اسم المستثمر", help="اسم الشريك المسجل"),
+                    "كود العقار": st.column_config.TextColumn("العقار"),
+                    "تكلفة العقار": st.column_config.NumberColumn("التكلفة الإجمالية", format="%.0f ج.م"),
+                    "سعر البيع": st.column_config.NumberColumn("البيع المستهدف", format="%.0f ج.م"),
+                    "ربح العقار": st.column_config.NumberColumn("صافي ربح العقار", format="%.0f ج.م"),
+                    "نسبة الشراكة": st.column_config.ProgressColumn("نسبة الشراكة", format="%.1f%%", min_value=0, max_value=100),
+                    "المبلغ المستثمر": st.column_config.NumberColumn("رأس المال", format="%.0f ج.م"),
+                    "حصة الربح": st.column_config.NumberColumn("الربح المتوقع", format="%.0f ج.م"),
+                    "العائد ROI %": st.column_config.NumberColumn("العائد ROI", format="%.2f%%"),
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.markdown("---")
+            
+            col_del1, col_del2 = st.columns([2, 1])
+            with col_del1:
+                inv_to_del = st.selectbox("اختر رقم معرف الحساب (ID) لإلغاء الشراكة أو حذفه", df_display['ID'].tolist(), key="inv_del_select")
+            with col_del2:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ حذف سجل المستثمر المحدد", use_container_width=True, key="inv_del_btn"):
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM investors WHERE id = ?", (inv_to_del,))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم حذف سجل المستثمر بنجاح!")
+                    st.rerun()
+        else:
+            st.info("لا يوجد مستثمرون مسجلون حالياً.")
+
+    with tab_inv3:
+        st.subheader("➕ ربط مستثمر جديد بعقار")
+        conn = get_connection()
+        df_props_list = pd.read_sql_query("SELECT prop_code, prop_type, total_price, selling_price FROM properties", conn)
+        conn.close()
+        
+        if not df_props_list.empty:
+            with st.form("investor_form_new", clear_on_submit=True):
+                col_f1, col_f2 = st.columns(2)
+                
+                with col_f1:
+                    investor_name = st.text_input("اسم المستثمر / الشريك الكامل")
+                    selected_prop = st.selectbox("اختر العقار المرتبط", df_props_list['prop_code'])
+                
+                with col_f2:
+                    share_percentage = st.number_input("نسبة الشراكة من صافي الأرباح (%)", min_value=0.0, max_value=100.0, step=0.5)
+                    invested_amount = st.number_input("المبلغ المدفوع / المستثمر (ج.م)", min_value=0.0, step=5000.0)
+                
+                submit_inv = st.form_submit_button("💾 حفظ بيانات الشراكة")
+                if submit_inv:
+                    if investor_name.strip() != "":
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO investors (investor_name, prop_code, share_percentage, invested_amount)
+                            VALUES (?, ?, ?, ?)
+                        """, (investor_name, selected_prop, share_percentage, invested_amount))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"تم ربط المستثمر ({investor_name}) بالعقار ({selected_prop}) بنجاح!")
+                        st.rerun()
+                    else:
+                        st.warning("يرجى إدخال اسم المستثمر.")
+        else:
+            st.warning("لا توجد عقارات مسجلة في المخزون العقاري! قم بإضافة عقارات أولاً لربط المستثمرين بها.")
+
 # ---------------------------------------------------------
-# 6. التوجيه النهائي
+# 11. إدارة المستخدمين
 # ---------------------------------------------------------
-if not st.session_state.authenticated:
-    login_page()
-else:
-    main_app()
+elif menu == "إدارة المستخدمين والصلاحيات":
+    st.header("🔐 إدارة المستخدمين والصلاحيات")
+    
+    tab_u1, tab_u2 = st.tabs(["إضافة مستخدم جديد", "عرض المستخدمين وحذفهم"])
+    
+    with tab_u1:
+        with st.form("add_user_form"):
+            new_username = st.text_input("اسم المستخدم")
+            new_password = st.text_input("كلمة المرور", type="password")
+            new_fullname = st.text_input("الاسم الكامل")
+            new_email = st.text_input("البريد الإلكتروني")
+            new_phone = st.text_input("رقم الهاتف")
+            new_role = st.selectbox("الصلاحية", ["ادمن", "HR", "محاسب", "IT", "عقارات"])
+            
+            submit_user = st.form_submit_button("إضافة المستخدم")
+            if submit_user:
+                conn = get_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO users (username, password, full_name, email, phone, avatar_path, role)
+                        VALUES (?, ?, ?, ?, ?, '', ?)
+                    """, (new_username, new_password, new_fullname, new_email, new_phone, new_role))
+                    conn.commit()
+                    st.success("تم إضافته بنجاح!")
+                except Exception as e:
+                    st.error("اسم المستخدم مكرر!")
+                finally:
+                    conn.close()
+                st.rerun()
+
+    with tab_u2:
+        conn = get_connection()
+        df_users = pd.read_sql_query("SELECT id, username, full_name, email, phone, role FROM users", conn)
+        st.dataframe(df_users, use_container_width=True)
+        deletable_users = df_users[df_users['id'] != 1]['username'].tolist()
+        if deletable_users:
+            user_to_del = st.selectbox("حذف مستخدم", deletable_users, key="user_del_select")
+            if st.button("حذف المستخدم", key="user_del_btn"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM users WHERE username = ?", (user_to_del,))
+                conn.commit()
+                st.success("تم الحذف!")
+                conn.close()
+                st.rerun()
+        conn.close()
+
+# ---------------------------------------------------------
+# 12. الملف الشخصي
+# ---------------------------------------------------------
+elif menu == "الملف الشخصي":
+    st.header("👤 الملف الشخصي وإدارة الحساب")
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, password, full_name, email, phone, avatar_path FROM users WHERE id = ?", (st.session_state['user_id'],))
+    u_data = cursor.fetchone()
+    conn.close()
+    
+    col_prof1, col_prof2 = st.columns([1, 2])
+    
+    with col_prof1:
+        st.subheader("الصورة الشخصية")
+        if u_data[5] and os.path.exists(u_data[5]):
+            st.image(u_data[5], width=180)
+        else:
+            st.info("لا توجد صورة مضافة.")
+            
+        avatar_file = st.file_uploader("تحديث الصورة", type=['png', 'jpg', 'jpeg'], key="avatar_upload_input")
+        if avatar_file is not None:
+            if not os.path.exists("avatars"):
+                os.makedirs("avatars")
+            avatar_path = os.path.join("avatars", f"user_{st.session_state['user_id']}_{avatar_file.name}")
+            with open(avatar_path, "wb") as f:
+                f.write(avatar_file.getbuffer())
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET avatar_path = ? WHERE id = ?", (avatar_path, st.session_state['user_id']))
+            conn.commit()
+            conn.close()
+            st.success("تم تحديث الصورة!")
+            st.rerun()
+
+    with col_prof2:
+        st.subheader("تعديل بيانات الحساب")
+        with st.form("profile_form"):
+            full_name_val = st.text_input("الاسم الكامل", value=u_data[2] if u_data[2] else "")
+            email_val = st.text_input("البريد الإلكتروني", value=u_data[3] if u_data[3] else "")
+            phone_val = st.text_input("رقم الهاتف", value=u_data[4] if u_data[4] else "")
+            username_val = st.text_input("اسم المستخدم (Username)", value=u_data[0])
+            password_val = st.text_input("كلمة المرور جديدة (Password)", value=u_data[1], type="password")
+            
+            save_profile = st.form_submit_button("حفظ التعديلات")
+            if save_profile:
+                conn = get_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        UPDATE users 
+                        SET full_name = ?, email = ?, phone = ?, username = ?, password = ?
+                        WHERE id = ?
+                    """, (full_name_val, email_val, phone_val, username_val, password_val, st.session_state['user_id']))
+                    conn.commit()
+                    st.success("تم تحديث الحساب بنجاح!")
+                except Exception as e:
+                    st.error("اسم المستخدم هذا مستخدم بالفعل!")
+                finally:
+                    conn.close()
+                st.rerun()
+
+# ---------------------------------------------------------
+# 13. رفع وإدارة المستندات والعقود
+# ---------------------------------------------------------
+elif menu == "رفع المستندات":
+    st.header("📁 مركز أرشفة وإدارة المستندات والعقود")
+    
+    with st.form("upload_doc_form", clear_on_submit=True):
+        col_u1, col_u2 = st.columns(2)
+        with col_u1:
+            uploaded_file = st.file_uploader("اختر المستند لرفعه", type=['pdf', 'png', 'jpg', 'jpeg'], key="doc_file_uploader")
+        with col_u2:
+            doc_type = st.selectbox("نوع المستند / التصنيف", [
+                "عقد أرض",
+                "عقد استثمار",
+                "عقد إيجار",
+                "ملف تحويل أموال",
+                "أخرى"
+            ])
+            doc_description = st.text_input("ملاحظات / وصف مختصر للمستند")
+            
+        submit_upload = st.form_submit_button("📤 رفع وحفظ المستند")
+        
+        if submit_upload:
+            if uploaded_file is not None:
+                if not os.path.exists("uploads"):
+                    os.makedirs("uploads")
+                
+                file_path = os.path.join("uploads", uploaded_file.name)
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                
+                if 'docs_meta' not in st.session_state:
+                    st.session_state['docs_meta'] = {}
+                
+                st.session_state['docs_meta'][uploaded_file.name] = {
+                    "type": doc_type,
+                    "desc": doc_description
+                }
+                
+                st.success(f"تم رفع الملف `{uploaded_file.name}` بنجاح وتصنيفه كـ ({doc_type})!")
+                st.rerun()
+            else:
+                st.warning("يرجى اختيار ملف أولاً قبل الضغط على حفظ.")
+
+    st.divider()
+    st.subheader("📄 المستندات والعقود المرفوعة")
+    
+    if os.path.exists("uploads"):
+        files = os.listdir("uploads")
+        if files:
+            for file in files:
+                file_path = os.path.join("uploads", file)
+                file_ext = os.path.splitext(file)[1].lower()
+                
+                meta = st.session_state.get('docs_meta', {}).get(file, {"type": "غير محدد", "desc": "-"})
+                
+                with st.expander(f"📁 {file}  |  🏷️ **التصنيف:** {meta['type']}"):
+                    col_info, col_actions = st.columns([2, 1])
+                    
+                    with col_info:
+                        st.write(f"**اسم الملف:** `{file}`")
+                        st.write(f"**نوع المستند:** {meta['type']}")
+                        st.write(f"**الوصف/الملاحظات:** {meta['desc']}")
+                    
+                    with col_actions:
+                        with open(file_path, "rb") as f:
+                            st.download_button(
+                                label="💾 تنزيل المستند",
+                                data=f,
+                                file_name=file,
+                                mime="application/octet-stream",
+                                key=f"down_{file}"
+                            )
+                        
+                        if st.button("🗑️ حذف المستند", key=f"del_file_{file}"):
+                            os.remove(file_path)
+                            if 'docs_meta' in st.session_state and file in st.session_state['docs_meta']:
+                                del st.session_state['docs_meta'][file]
+                            st.success("تم حذف الملف!")
+                            st.rerun()
+
+                    st.markdown("---")
+                    st.caption("🔍 **معاينة المستند:**")
+                    if file_ext in ['.png', '.jpg', '.jpeg']:
+                        st.image(file_path, use_container_width=True)
+                    elif file_ext == '.pdf':
+                        st.info("📄 ملف PDF جاهز للتحميل عبر الزر أعلاه (أو يمكنك معاينته عبر المتصفح).")
+        else:
+            st.info("لا توجد مستندات مرفوعة حالياً.")
+    else:
+        st.info("مجلد المستندات فارغ.")
