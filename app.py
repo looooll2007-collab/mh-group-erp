@@ -1,219 +1,158 @@
 import streamlit as st
+import sqlite3
+import pandas as pd
 
-# 1. تهيئة إعدادات الصفحة
+# 1. إعدادات الصفحة
 st.set_page_config(
     page_title="MH GROUP ERP",
     page_icon="🏢",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# 2. كود الـ CSS المخصص
-siteonic_style_css = """
+# 2. كود الـ CSS الشامل (تعديل الألوان والتصاميم بدون تعطيل عناصر Streamlit)
+custom_css = """
 <style>
-/* إخفاء العناصر الافتراضية */
-#MainMenu, header, footer {visibility: hidden;}
-[data-testid="stHeader"] {display: none;}
-.block-container {
-    padding-top: 0rem !important;
-    padding-bottom: 0rem !important;
-    padding-left: 0rem !important;
-    padding-right: 0rem !important;
-    max-width: 100% !important;
-}
-
-/* 1. الشريط العلوي (Top Navbar) */
-.navbar-container {
-    background-color: #ffffff;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 8%;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+/* الاتجاه العام واللون الخلفي */
+html, body, [data-testid="stAppViewContainer"] {
     direction: rtl;
-}
-.brand-logo {
-    font-size: 1.8rem;
-    font-weight: 800;
-    color: #1e3a8a;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    letter-spacing: -0.5px;
-}
-.brand-logo span {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 400;
-    color: #64748b;
-    margin-top: -4px;
-}
-.nav-links {
-    display: flex;
-    gap: 30px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-.nav-links a {
-    text-decoration: none;
-    color: #475569;
-    font-size: 0.95rem;
-    font-weight: 600;
-    transition: color 0.2s ease;
-}
-.nav-links a:hover {
-    color: #2563eb;
+    text-align: right;
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
 }
 
-/* 2. قسم البطل الرئيسي (Hero Section) */
-.hero-wrapper {
-    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #1e40af 100%);
-    min-height: 85vh;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 8%;
-    direction: rtl;
-    position: relative;
-    overflow: hidden;
+[data-testid="stHeader"] {
+    background-color: transparent !important;
 }
 
-/* المحتوى الأيمن */
-.hero-content {
-    max-width: 550px;
-    color: #ffffff;
-    z-index: 2;
+[data-testid="stSidebar"] {
+    background-color: #161b22 !important;
+    border-left: 1px solid #30363d !important;
 }
-.hero-title {
-    font-size: 2.8rem;
-    font-weight: 800;
-    line-height: 1.25;
-    margin-bottom: 15px;
+
+/* الأزرار الرئيسية */
+.stButton > button {
+    background-color: #d4af37 !important;
+    color: #0d1117 !important;
+    font-weight: bold !important;
+    border-radius: 8px !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.3s ease !important;
+    width: 100% !important;
+}
+
+.stButton > button:hover {
+    background-color: #f1c40f !important;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.4) !important;
+}
+
+/* إصلاح حقول الإدخال ومنع طفح كلمة visibility/visibili */
+div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
+    background-color: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 8px !important;
+}
+
+div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea {
     color: #ffffff !important;
-}
-.hero-subtitle {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: #e0e7ff;
-    margin-bottom: 10px;
-}
-.hero-description {
-    font-size: 0.95rem;
-    color: #c7d2fe;
-    line-height: 1.6;
-    margin-bottom: 30px;
+    background-color: transparent !important;
 }
 
-/* الأزرار */
-.cta-buttons {
-    display: flex;
-    gap: 15px;
+/* إصلاح أيقونة إظهار/إخفاء كلمة المرور */
+button[aria-label="Show password"], 
+button[aria-label="Hide password"],
+[data-aria-label="Show password"] {
+    color: #8b949e !important;
+    background: transparent !important;
 }
-.btn-primary {
-    background-color: #ffffff;
-    color: #1e40af !important;
-    font-weight: 700;
-    padding: 10px 24px;
-    border-radius: 8px;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-    transition: all 0.3s ease;
+
+button[aria-label="Show password"] *, 
+button[aria-label="Hide password"] * {
+    font-size: 0 !important;
 }
-.btn-primary:hover {
-    background-color: #f8fafc;
-    transform: translateY(-2px);
+
+/* جداول البيانات والعناوين */
+[data-testid="stDataFrame"] {
+    background-color: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 10px !important;
 }
-.btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
+
+h1, h2, h3, h4 {
     color: #ffffff !important;
-    font-weight: 600;
-    padding: 10px 24px;
-    border-radius: 8px;
-    text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(5px);
-    transition: all 0.3s ease;
+    font-weight: 700 !important;
 }
-.btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-/* 3. البطاقات الشفافة العائمة (Glassmorphic Cards) */
-.glass-container {
-    position: relative;
-    width: 450px;
-    height: 350px;
-    z-index: 2;
-}
-.glass-badge {
-    position: absolute;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 12px;
-    padding: 12px 22px;
-    color: #ffffff;
-    font-weight: 700;
-    font-size: 0.95rem;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
-}
-
-.badge-1 { top: 40px; right: 20px; }
-.badge-2 { top: 130px; right: 120px; }
-.badge-3 { top: 220px; right: 200px; }
 </style>
 """
 
-st.markdown(siteonic_style_css, unsafe_allow_html=True)
+st.markdown(custom_css, unsafe_allow_html=True)
 
-# 3. بناء واجهة الـ HTML المحدثة
-hero_html = """
-<div class="navbar-container">
-    <div class="brand-logo">
-        ام اتش جروب
-        <span>MH GROUP</span>
-    </div>
-    <ul class="nav-links">
-        <li><a href="#">تواصل معنا</a></li>
-        <li><a href="#">خدماتنا</a></li>
-        <li><a href="#">عن الشركة</a></li>
-    </ul>
-</div>
+# 3. إدارة جلسة التسجيل
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
-<div class="hero-wrapper">
-    <div class="hero-content">
-        <div class="hero-title">مرحباً بكم في بوابة<br>فريق ام اتش جروب</div>
-        <div class="hero-subtitle">بوابتكم نحو الإدارة العقارية والإنتاجية الفعالة</div>
-        <div class="hero-description">
-            انضموا إلى منصتنا المتكاملة واحصلوا على جميع الأدوات الذكية التي تحتاجونها لإدارة الموارد، الاستثمارات، والتحليلات بنجاح.
-        </div>
-        <div class="cta-buttons">
-            <a href="#" class="btn-primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13 12H3"/></svg>
-                تسجيل الدخول
-            </a>
-            <a href="#" class="btn-secondary">اعرف المزيد</a>
-        </div>
-    </div>
+# قائمة الحسابات المصرح لها
+USERS_DB = {
+    "admin": "123456",
+    "admin@mhgroup.com": "123456"
+}
 
-    <div class="glass-container">
-        <div class="glass-badge badge-1">
-            <span>التحليلات</span> 📈
-        </div>
-        <div class="glass-badge badge-2">
-            <span>العمل الجماعي</span> 👥
-        </div>
-        <div class="glass-badge badge-3">
-            <span>الإدارة</span> ⚙️
-        </div>
-    </div>
-</div>
-"""
+# 4. صفحة تسجيل الدخول
+def login_page():
+    st.markdown("<h1 style='text-align: center; margin-bottom: 0px;'>للاستثمار والتطوير العقاري MH GROUP</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #8b949e !important; font-size: 1.1rem; margin-bottom: 30px;'>نظام إدارة الموارد المؤسسية ERP</h3>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        username_input = st.text_input("اسم المستخدم أو البريد الإلكتروني")
+        password_input = st.text_input("كلمة المرور", type="password")
+        
+        if st.button("تسجيل الدخول"):
+            user_clean = username_input.strip()
+            pass_clean = password_input.strip()
+            
+            if user_clean in USERS_DB and USERS_DB[user_clean] == pass_clean:
+                st.session_state.authenticated = True
+                st.session_state.username = user_clean
+                st.rerun()
+            elif user_clean == "" or pass_clean == "":
+                st.warning("يرجى إدخال اسم المستخدم وكلمة المرور")
+            else:
+                st.error("اسم المستخدم / البريد الإلكتروني أو كلمة المرور غير صحيحة")
 
-st.markdown(hero_html, unsafe_allow_html=True)
+# 5. لوحة التحكم الرئيسية (ERP Dashboard)
+def main_app():
+    st.sidebar.title(f"مرحباً، {st.session_state.username}")
+    
+    menu = st.sidebar.radio("القائمة الرئيسية", [
+        "لوحة التحكم (Dashboard)", 
+        "الملف الشخصي",
+        "إدارة المستخدمين والصلاحيات",
+        "رفع المستندات",
+        "الموارد البشرية (HR)",
+        "الحسابات والمالية", 
+        "حالة المخزون العقاري"
+    ])
+    
+    if st.sidebar.button("تسجيل الخروج"):
+        st.session_state.authenticated = False
+        st.rerun()
+
+    st.title(f"قسم: {menu}")
+    
+    if menu == "لوحة التحكم (Dashboard)":
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("حالة المخزون العقاري")
+            st.info("لا توجد عقارات مسجلة بالمخزون بعد")
+        with col2:
+            st.subheader("توزيع التدفقات المالية")
+            st.info("لم يتم تسجيل عمليات مالية جديدة")
+
+# 6. التوجيه
+if not st.session_state.authenticated:
+    login_page()
+else:
+    main_app()
