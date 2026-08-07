@@ -24,11 +24,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# الثيم الافتراضي في الجلسة
+# تعيين الثيم الافتراضي في الجلسة
 if 'app_theme' not in st.session_state:
     st.session_state['app_theme'] = "Dark Executive"
 
-# قاموس ألوان الثيمات للمطور
+# قاموس الألوان والتصاميم المتاحة للمطور
 THEMES_CONFIG = {
     "Dark Executive": {
         "bg": "#0d1117",
@@ -84,14 +84,14 @@ THEMES_CONFIG = {
 
 current_theme_cfg = THEMES_CONFIG[st.session_state['app_theme']]
 
-# تطبيق CSS مع إلغاء مشكلة Keyboard Tooltips عند التمرير
+# تطبيق الـ CSS الديناميكي وإلغاء مشكلة Keyboard Tooltips عند التمرير
 st.markdown(f"""
     <style>
-    /* إلغاء حواشي وتلميحات الكيبورد والتأثيرات غير المرغوبة عند تحريك الماوس */
+    /* 1. إخفاء حواشي وتلميحات الكيبورد والـ Tooltips نهائياً عند التمرير */
     [data-testid="stSidebar"] [data-testid="stRadio"] label::before,
     [data-testid="stSidebar"] [data-testid="stRadio"] label::after,
     [title*="keyboard"], [aria-label*="keyboard"], .st-emotion-cache-12fmw4p,
-    [data-baseweb="tooltip"], div[role="tooltip"] {{
+    [data-baseweb="tooltip"], div[role="tooltip"], [data-testid="stSidebar"] *[title] {{
         display: none !important;
         opacity: 0 !important;
         visibility: hidden !important;
@@ -103,13 +103,13 @@ st.markdown(f"""
         box-shadow: none !important;
     }}
 
-    /* خلفيات ونصوص التطبيق */
+    /* 2. خلفيات ونصوص التطبيق */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{
         background-color: {current_theme_cfg["bg"]} !important;
         color: {current_theme_cfg["text"]} !important;
     }}
         
-    /* القائمة الجانبية */
+    /* 3. القائمة الجانبية */
     [data-testid="stSidebar"] {{
         background-color: {current_theme_cfg["sidebar_bg"]} !important;
         border-right: 1px solid {current_theme_cfg["border"]} !important;
@@ -125,7 +125,7 @@ st.markdown(f"""
         transition: all 0.2s ease !important;
     }}
 
-    /* العناوين والنصوص */
+    /* 4. العناوين والنصوص */
     h1, h2, h3, h4, h5, h6, label, p, span {{
         color: {current_theme_cfg["text"]} !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
@@ -134,7 +134,7 @@ st.markdown(f"""
     h2 {{ color: {current_theme_cfg["accent"]} !important; font-size: 1.6rem !important; border-bottom: 2px solid {current_theme_cfg["border"]}; padding-bottom: 8px; margin-top: 15px; }}
     h3 {{ font-size: 1.25rem !important; }}
 
-    /* كروت المؤشرات KPI */
+    /* 5. كروت المؤشرات KPI */
     .kpi-card {{
         background: {current_theme_cfg["card_bg"]};
         border: 1px solid {current_theme_cfg["border"]};
@@ -165,7 +165,7 @@ st.markdown(f"""
         margin: 0 !important;
     }}
 
-    /* الأزرار */
+    /* 6. الأزرار */
     .stButton>button {{
         background: linear-gradient(135deg, {current_theme_cfg["accent"]} 0%, #aa7c11 100%) !important;
         color: #0d1117 !important;
@@ -183,7 +183,7 @@ st.markdown(f"""
         transform: translateY(-1px);
     }}
 
-    /* المدخلات والجداول */
+    /* 7. المدخلات والجداول */
     .stTextInput>div>div>input, .stSelectbox>div>div, .stNumberInput>div>div>input, .stTextArea>div>div>textarea {{
         background-color: {current_theme_cfg["sidebar_bg"]} !important;
         color: {current_theme_cfg["text"]} !important;
@@ -580,27 +580,4 @@ if menu == "الرئيسية (Dashboard)":
                 df_prop, 
                 names='status', 
                 hole=0.5, 
-                color_discrete_sequence=['#2ecc71', '#f39c12']
-            )
-            fig2.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', 
-                plot_bgcolor='rgba(0,0,0,0)', 
-                font=dict(color=current_theme_cfg["text"]),
-                legend=dict(orientation="h", y=-0.1)
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info("لا توجد عقارات مسجلة بالمخزون بعد.")
-
-# ---------------------------------------------------------
-# 6. قسم الموارد البشرية (HR)
-# ---------------------------------------------------------
-elif menu == "الموارد البشرية (HR)":
-    st.header("قسم الموارد البشرية والعمالة")
-    
-    tab1, tab2, tab3 = st.tabs(["إضافة جديد", "عرض وحذف السجلات", "تعديل بيانات"])
-    
-    with tab1:
-        with st.form("hr_form"):
-            col_a, col_b = st.columns(2)
-            
+                color_discrete_sequence=['#2
