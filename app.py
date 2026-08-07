@@ -13,23 +13,115 @@ except ImportError:
     st.error("يرجى تثبيت مكتبة fpdf عبر الأمر: pip install fpdf2")
 
 # ---------------------------------------------------------
-# 1. إعدادات الصفحة والتصميم (Luxury Theme & CSS)
+# 1. إعدادات الصفحة والتصميم العالي الاحترافية (Dark Executive UI)
 # ---------------------------------------------------------
-st.set_page_config(page_title="MH GROUP ERP", layout="wide", page_icon="🏢")
+st.set_page_config(
+    page_title="MH GROUP ERP",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# كود التنسيق الشامل لتوحيد المظهر وإغلاق ثغرات التباين
 st.markdown("""
     <style>
-    .stApp { background-color: #0d1117; color: #e6edf3; }
-    h1, h2, h3 { color: #d4af37 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: bold; }
-    h1 { font-size: 2.2rem !important; }
-    h2 { font-size: 1.8rem !important; border-bottom: 2px solid #d4af37; padding-bottom: 8px; }
-    h3 { font-size: 1.4rem !important; }
-    section[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
-    section[data-testid="stSidebar"] .stRadio label { font-size: 1.15rem !important; font-weight: 600 !important; color: #c9d1d9 !important; padding: 5px 0; }
-    div[data-testid="stMetric"] { background: linear-gradient(135deg, #1f242d 0%, #161b22 100%); border: 1px solid #d4af37; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4); }
-    div[data-testid="stMetricValue"] { color: #ffd700 !important; font-size: 1.8rem !important; }
-    .stButton>button { background: linear-gradient(45deg, #d4af37, #aa7c11) !important; color: #000000 !important; font-weight: bold !important; font-size: 1rem !important; border-radius: 8px !important; border: none !important; transition: all 0.3s ease; }
-    .stButton>button:hover { background: linear-gradient(45deg, #ffd700, #c59b27) !important; box-shadow: 0 0 10px rgba(212, 175, 55, 0.6); }
+    /* 1. إجبار خلفية التطبيق الأساسية على اللون الداكن الأنيق */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: #0d1117 !important;
+        color: #f0f6fc !important;
+    }
+    
+    /* 2. ضبط القائمة الجانبية وتحسين خطوطها ورؤيتها */
+    [data-testid="stSidebar"] {
+        background-color: #161b22 !important;
+        border-right: 1px solid #30363d !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e6edf3 !important;
+    }
+    [data-testid="stSidebar"] .stRadio label {
+        font-size: 1.05rem !important;
+        font-weight: 600 !important;
+        padding: 8px 12px !important;
+        border-radius: 6px !important;
+        transition: all 0.2s ease !important;
+    }
+
+    /* 3. العناوين والنصوص */
+    h1, h2, h3, h4, h5, h6, label, p, span {
+        color: #f0f6fc !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    }
+    h1 { color: #d4af37 !important; font-size: 2.2rem !important; font-weight: 700; }
+    h2 { color: #d4af37 !important; font-size: 1.6rem !important; border-bottom: 2px solid #30363d; padding-bottom: 8px; margin-top: 15px; }
+    h3 { font-size: 1.25rem !important; color: #c9d1d9 !important; }
+
+    /* 4. كروت المؤشرات المخصصة (Custom Executive KPI Cards) */
+    .kpi-card {
+        background: linear-gradient(145deg, #161b22 0%, #1f242d 100%);
+        border: 1px solid #30363d;
+        border-top: 3px solid #d4af37;
+        border-radius: 12px;
+        padding: 20px 15px;
+        text-align: center;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 25px rgba(212, 175, 55, 0.15);
+    }
+    .kpi-title {
+        color: #8b949e !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+        display: block;
+    }
+    .kpi-value {
+        color: #ffd700 !important;
+        font-size: 1.75rem !important;
+        font-weight: 700 !important;
+        margin: 0 !important;
+    }
+
+    /* 5. تصميم أزرار النظام */
+    .stButton>button {
+        background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%) !important;
+        color: #0d1117 !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 8px 20px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton>button:hover {
+        background: linear-gradient(135deg, #ffd700 0%, #c59b27 100%) !important;
+        box-shadow: 0 6px 18px rgba(212, 175, 55, 0.4) !important;
+        transform: translateY(-1px);
+    }
+
+    /* 6. توحيد الحقول والمدخلات والجداول */
+    .stTextInput>div>div>input, .stSelectbox>div>div, .stNumberInput>div>div>input, .stTextArea>div>div>textarea {
+        background-color: #161b22 !important;
+        color: #f0f6fc !important;
+        border: 1px solid #30363d !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stDataFrame"] {
+        background-color: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 10px !important;
+    }
+    
+    /* إزالة الخلفيات البيضاء عن الإطار الخاص بـ Plotly */
+    .js-plotly-plot .plotly, .plot-container {
+        background-color: transparent !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -232,13 +324,15 @@ if "session" in query_params and not st.session_state['logged_in']:
         st.session_state['user_role'] = sess_data[1]
 
 def login():
-    st.markdown("<h1 style='text-align: center; color: #ffd700;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>نظام إدارة الموارد ERP</h3>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #d4af37; margin-top: 50px;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #8b949e !important;'>نظام إدارة الموارد المؤسسية ERP</h3>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1.8, 1])
     with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
         username_input = st.text_input("اسم المستخدم", key="login_username")
         password_input = st.text_input("كلمة المرور", type="password", key="login_password")
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.button("تسجيل الدخول", use_container_width=True, key="login_btn"):
             conn = get_connection()
             cursor = conn.cursor()
@@ -271,12 +365,12 @@ cursor.execute("SELECT full_name, avatar_path, role FROM users WHERE id = ?", (s
 current_user = cursor.fetchone()
 conn.close()
 
-st.sidebar.title("🏢 MH GROUP ERP")
+st.sidebar.title("MH GROUP ERP")
 if current_user:
     if current_user[1] and os.path.exists(current_user[1]):
-        st.sidebar.image(current_user[1], width=100)
+        st.sidebar.image(current_user[1], width=90)
     st.sidebar.markdown(f"**أهلاً بك، {current_user[0]}**")
-    st.sidebar.caption(f"الصلاحية الحالية: `{current_user[2]}`")
+    st.sidebar.caption(f"الصلاحية: `{current_user[2]}`")
 
 st.sidebar.markdown("---")
 
@@ -306,9 +400,10 @@ elif user_role == "عقارات":
     allowed_menu.insert(0, "المخزون العقاري")
     allowed_menu.append("أسهم المستثمرين")
 
-menu = st.sidebar.radio("📋 الأقسام المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
+menu = st.sidebar.radio("الأقسام المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
 
-if st.sidebar.button("🚪 تسجيل الخروج", key="logout_btn"):
+st.sidebar.markdown("---")
+if st.sidebar.button("تسجيل الخروج", key="logout_btn", use_container_width=True):
     if "session" in st.query_params:
         token_to_del = st.query_params["session"]
         conn = get_connection()
@@ -324,10 +419,10 @@ if st.sidebar.button("🚪 تسجيل الخروج", key="logout_btn"):
     st.rerun()
 
 # ---------------------------------------------------------
-# 5. Dashboard
+# 5. Dashboard (اللوحة الرئيسية الاحترافية)
 # ---------------------------------------------------------
 if menu == "الرئيسية (Dashboard)":
-    st.header("📊 لوحة التحكم والأداء العام")
+    st.header("لوحة التحكم والأداء العام")
     
     conn = get_connection()
     df_fin = pd.read_sql_query("SELECT * FROM finance", conn)
@@ -341,27 +436,75 @@ if menu == "الرئيسية (Dashboard)":
     total_props = len(df_prop)
     total_employees = len(df_hr)
     
+    # كروت المؤشرات المخصصة
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("إجمالي الإيرادات", f"{total_rev:,.2f} ج.م")
-    c2.metric("إجمالي المصروفات", f"{total_exp:,.2f} ج.م")
-    c3.metric("صافي الأرباح", f"{net_profit:,.2f} ج.م")
-    c4.metric("العقارات / القوة البشرية", f"{total_props} عقار / {total_employees} فرد")
+    with c1:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">إجمالي الإيرادات</span>
+                <h3 class="kpi-value">{total_rev:,.2f} ج.م</h3>
+            </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">إجمالي المصروفات</span>
+                <h3 class="kpi-value">{total_exp:,.2f} ج.م</h3>
+            </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">صافي الأرباح</span>
+                <h3 class="kpi-value">{net_profit:,.2f} ج.م</h3>
+            </div>
+        """, unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"""
+            <div class="kpi-card">
+                <span class="kpi-title">العقارات / القوة البشرية</span>
+                <h3 class="kpi-value">{total_props} عقار / {total_employees} فرد</h3>
+            </div>
+        """, unsafe_allow_html=True)
     
-    st.divider()
+    st.markdown("<br>", unsafe_allow_html=True)
     
     col_chart1, col_chart2 = st.columns(2)
     with col_chart1:
-        st.subheader("📈 توزيع التدفقات المالية")
+        st.subheader("توزيع التدفقات المالية")
         if not df_fin.empty:
-            fig1 = px.pie(df_fin, values='amount', names='type', title="نسب الإيرادات والمصروفات", hole=0.4, color_discrete_sequence=['#d4af37', '#e74c3c'])
+            fig1 = px.pie(
+                df_fin, 
+                values='amount', 
+                names='type', 
+                hole=0.5, 
+                color_discrete_sequence=['#d4af37', '#e74c3c']
+            )
+            fig1.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                font=dict(color='#f0f6fc'),
+                legend=dict(orientation="h", y=-0.1)
+            )
             st.plotly_chart(fig1, use_container_width=True)
         else:
             st.info("لا توجد بيانات مالية مسجلة بعد.")
             
     with col_chart2:
-        st.subheader("🏠 حالة المخزون العقاري")
+        st.subheader("حالة المخزون العقاري")
         if not df_prop.empty:
-            fig2 = px.pie(df_prop, names='status', title="حالة العقارات", hole=0.4, color_discrete_sequence=['#2ecc71', '#f39c12'])
+            fig2 = px.pie(
+                df_prop, 
+                names='status', 
+                hole=0.5, 
+                color_discrete_sequence=['#2ecc71', '#f39c12']
+            )
+            fig2.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                font=dict(color='#f0f6fc'),
+                legend=dict(orientation="h", y=-0.1)
+            )
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.info("لا توجد عقارات مسجلة بالمخزون بعد.")
@@ -370,9 +513,9 @@ if menu == "الرئيسية (Dashboard)":
 # 6. قسم الموارد البشرية (HR)
 # ---------------------------------------------------------
 elif menu == "الموارد البشرية (HR)":
-    st.header("👥 قسم الموارد البشرية والعمالة")
+    st.header("قسم الموارد البشرية والعمالة")
     
-    tab1, tab2, tab3 = st.tabs(["➕ إضافة جديد", "📋 عرض وحذف السجلات", "✏️ تعديل بيانات"])
+    tab1, tab2, tab3 = st.tabs(["إضافة جديد", "عرض وحذف السجلات", "تعديل بيانات"])
     
     with tab1:
         with st.form("hr_form"):
@@ -412,7 +555,7 @@ elif menu == "الموارد البشرية (HR)":
         st.dataframe(df_hr, use_container_width=True)
         
         if not df_hr.empty:
-            st.subheader("🗑️ حذف سجل من HR")
+            st.subheader("حذف سجل من HR")
             hr_to_delete = st.selectbox("اختر السجل المراد حذفه (ID)", df_hr['id'].tolist(), key="hr_del_select")
             if st.button("حذف السجل المحدد", key="hr_del_btn"):
                 cursor = conn.cursor()
@@ -454,12 +597,12 @@ elif menu == "الموارد البشرية (HR)":
 # 7. قسم المالية والأجور (Payroll & Finance)
 # ---------------------------------------------------------
 elif menu == "المالية والأجور":
-    st.header("💰 قسم المالية وحساب الأجور والسُلف")
+    st.header("قسم المالية وحساب الأجور والسُلف")
     
-    tab1, tab2, tab3 = st.tabs(["📊 كشف الأجور والتصدير PDF/Excel", "💸 تسجيل السُلف", "🧾 الخزينة والمعاملات المالية"])
+    tab1, tab2, tab3 = st.tabs(["كشف الأجور والتصدير PDF/Excel", "تسجيل السُلف", "الخزينة والمعاملات المالية"])
     
     with tab1:
-        st.subheader("📑 كشف الأجور والصافي لكل العاملين")
+        st.subheader("كشف الأجور والصافي لكل العاملين")
         conn = get_connection()
         df_hr_all = pd.read_sql_query("SELECT * FROM hr", conn)
         df_adv_all = pd.read_sql_query("SELECT emp_code, SUM(amount) as total_adv FROM advances GROUP BY emp_code", conn)
@@ -495,20 +638,21 @@ elif menu == "المالية والأجور":
             df_payroll = pd.DataFrame(payroll_data)
             st.dataframe(df_payroll, use_container_width=True)
             
-            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True)
             col_pdf1, col_pdf2 = st.columns(2)
             
             with col_pdf1:
-                if st.button("📥 إنشاء وتنزيل كشف الأجور PDF", key="payroll_pdf_gen_btn"):
+                if st.button("إنشاء وتنزيل كشف الأجور PDF", key="payroll_pdf_gen_btn", use_container_width=True):
                     try:
                         pdf_path = generate_payroll_pdf(df_payroll)
                         with open(pdf_path, "rb") as f:
                             st.download_button(
-                                label="💾 اضغط هنا لتحميل ملف الـ PDF",
+                                label="اضغط هنا لتحميل ملف الـ PDF",
                                 data=f,
                                 file_name="MH_GROUP_Payroll_Report.pdf",
                                 mime="application/pdf",
-                                key="pdf_down_action"
+                                key="pdf_down_action",
+                                use_container_width=True
                             )
                     except Exception as e:
                         st.error(f"حدث خطأ أثناء تصدير PDF: {e}")
@@ -516,17 +660,18 @@ elif menu == "المالية والأجور":
             with col_pdf2:
                 csv_data = df_payroll.to_csv(index=False).encode('utf-8-sig')
                 st.download_button(
-                    label="📊 تنزيل كشف الأجور كملف Excel (عربي)",
+                    label="تنزيل كشف الأجور كملف Excel (عربي)",
                     data=csv_data,
                     file_name="MH_GROUP_Payroll_Report.csv",
                     mime="text/csv",
-                    key="csv_down_action"
+                    key="csv_down_action",
+                    use_container_width=True
                 )
         else:
             st.info("لا توجد بيانات موظفين أو عمال مسجلة بعد في قسم HR.")
 
     with tab2:
-        st.subheader("💵 تسجيل سلفة جديدة")
+        st.subheader("تسجيل سلفة جديدة")
         conn = get_connection()
         df_hr_list = pd.read_sql_query("SELECT emp_code, name FROM hr", conn)
         
@@ -547,7 +692,7 @@ elif menu == "المالية والأجور":
                     conn.close()
                     st.rerun()
                     
-            st.subheader("📜 سجل السُلف المسجلة")
+            st.subheader("سجل السُلف المسجلة")
             df_adv_logs = pd.read_sql_query("SELECT id, emp_code as 'الكود', person_name as 'الاسم', amount as 'المبلغ', date_added as 'التاريخ' FROM advances", conn)
             st.dataframe(df_adv_logs, use_container_width=True)
             if not df_adv_logs.empty:
@@ -562,7 +707,7 @@ elif menu == "المالية والأجور":
         conn.close()
 
     with tab3:
-        st.subheader("💳 الخزينة العامة والإيرادات / المصروفات")
+        st.subheader("الخزينة العامة والإيرادات / المصروفات")
         with st.form("fin_form"):
             fin_type = st.selectbox("نوع المعاملة", ["إيراد", "مصروف"])
             amount = st.number_input("المبلغ (ج.م)", min_value=0.0, step=100.0)
@@ -598,9 +743,9 @@ elif menu == "المالية والأجور":
 # 8. قسم المخزون العقاري
 # ---------------------------------------------------------
 elif menu == "المخزون العقاري":
-    st.header("🏠 إدارة المخزون العقاري والتكاليف")
+    st.header("إدارة المخزون العقاري والتكاليف")
     
-    tab1, tab2, tab3 = st.tabs(["➕ إضافة عقار جديد", "📋 قائمة العقارات وحذفها", "✏️ تعديل عقار"])
+    tab1, tab2, tab3 = st.tabs(["إضافة عقار جديد", "قائمة العقارات وحذفها", "تعديل عقار"])
     
     with tab1:
         with st.form("prop_form"):
@@ -677,9 +822,9 @@ elif menu == "المخزون العقاري":
 # 9. قسم تكنولوجيا المعلومات (IT)
 # ---------------------------------------------------------
 elif menu == "قسم تكنولوجيا المعلومات (IT)":
-    st.header("💻 قسم تكنولوجيا المعلومات (IT)")
+    st.header("قسم تكنولوجيا المعلومات (IT)")
     
-    tab_it1, tab_it2 = st.tabs(["➕ تسجيل ساعات ودعم IT", "📋 سجلات IT المسجلة"])
+    tab_it1, tab_it2 = st.tabs(["تسجيل ساعات ودعم IT", "سجلات IT المسجلة"])
     
     with tab_it1:
         with st.form("it_form"):
@@ -719,13 +864,13 @@ elif menu == "قسم تكنولوجيا المعلومات (IT)":
 # 10. قسم أسهم المستثمرين (لوحة تحليلات ورسومات بيانية)
 # ---------------------------------------------------------
 elif menu == "أسهم المستثمرين":
-    st.header("📈 لوحة تحليلات الشركاء ورأس المال المستثمر")
+    st.header("لوحة تحليلات الشركاء ورأس المال المستثمر")
     st.caption("نظام محاكاة الأرباح، توزيع الحصص، وتحليل عائد الاستثمار لكل عقار")
     
     tab_inv1, tab_inv2, tab_inv3 = st.tabs([
-        "📊 لوحة التحليلات والرسومات البيانية", 
-        "📋 جدول توزيع الحصص والأرباح", 
-        "➕ إضافة / ربط مستثمر"
+        "لوحة التحليلات والرسومات البيانية", 
+        "جدول توزيع الحصص والأرباح", 
+        "إضافة / ربط مستثمر"
     ])
     
     conn = get_connection()
@@ -766,18 +911,41 @@ elif menu == "أسهم المستثمرين":
             active_investors_count = df_raw_inv['investor_name'].nunique()
 
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("إجمالي رؤوس الأموال المستثمرة", f"{total_invested_all:,.0f} ج.م")
-            m2.metric("إجمالي الأرباح المستهدفة للشركاء", f"{total_expected_profits:,.0f} ج.م")
-            m3.metric("متوسط العائد ROI %", f"{avg_roi:.1f}%")
-            m4.metric("عدد المستثمرين النشطين", f"{active_investors_count} شركاء")
+            with m1:
+                st.markdown(f"""
+                    <div class="kpi-card">
+                        <span class="kpi-title">رؤوس الأموال المستثمرة</span>
+                        <h3 class="kpi-value">{total_invested_all:,.0f} ج.م</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+            with m2:
+                st.markdown(f"""
+                    <div class="kpi-card">
+                        <span class="kpi-title">أرباح الشركاء المستهدفة</span>
+                        <h3 class="kpi-value">{total_expected_profits:,.0f} ج.م</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+            with m3:
+                st.markdown(f"""
+                    <div class="kpi-card">
+                        <span class="kpi-title">متوسط العائد ROI %</span>
+                        <h3 class="kpi-value">{avg_roi:.1f}%</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+            with m4:
+                st.markdown(f"""
+                    <div class="kpi-card">
+                        <span class="kpi-title">عدد المستثمرين النشطين</span>
+                        <h3 class="kpi-value">{active_investors_count} شركاء</h3>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True)
 
             col_chart1, col_chart2 = st.columns(2)
             
             with col_chart1:
-                st.subheader("🥧 توزيع رؤوس الأموال حسب العقار")
-                # تم إصلاح لون الرسم البياني هنا باستبداله بـ YlOrBr_r الصريح
+                st.subheader("توزيع رؤوس الأموال حسب العقار")
                 fig_pie = px.pie(
                     df_raw_inv, 
                     values='invested_amount', 
@@ -787,25 +955,25 @@ elif menu == "أسهم المستثمرين":
                     color_discrete_sequence=px.colors.sequential.YlOrBr_r
                 )
                 fig_pie.update_traces(textinfo='percent+label', marker=dict(line=dict(color='#0d1117', width=2)))
-                fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
+                fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#f0f6fc'))
                 st.plotly_chart(fig_pie, use_container_width=True)
 
             with col_chart2:
-                st.subheader("📊 مقارنة الأرباح المتوقعة مقابل راس المال")
+                st.subheader("مقارنة الأرباح المتوقعة مقابل راس المال")
                 fig_bar = px.bar(
                     df_raw_inv, 
                     x='investor_name', 
                     y=['invested_amount', 'investor_profit'],
                     barmode='group',
                     labels={'value': 'المبلغ (ج.م)', 'investor_name': 'المستثمر', 'variable': 'البيان'},
-                    color_discrete_sequence=['#415a77', '#d4af37']
+                    color_discrete_sequence=['#30363d', '#d4af37']
                 )
                 fig_bar.data[0].name = "المبلغ المستثمر"
                 fig_bar.data[1].name = "الربح المتوقع"
-                fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
+                fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#f0f6fc'))
                 st.plotly_chart(fig_bar, use_container_width=True)
 
-            st.subheader("🚀 ترتيب المستثمرين حسب نسبة العائد على الاستثمار (ROI %)")
+            st.subheader("ترتيب المستثمرين حسب نسبة العائد على الاستثمار (ROI %)")
             fig_roi = px.bar(
                 df_raw_inv.sort_values(by='roi', ascending=False),
                 x='roi',
@@ -813,17 +981,17 @@ elif menu == "أسهم المستثمرين":
                 orientation='h',
                 color='roi',
                 text_auto='.1f',
-                color_continuous_scale='Blugrn',
+                color_continuous_scale='YlOrBr',
                 labels={'roi': 'العائد %', 'investor_name': 'المستثمر'}
             )
-            fig_roi.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e6edf3'))
+            fig_roi.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#f0f6fc'))
             st.plotly_chart(fig_roi, use_container_width=True)
 
         else:
             st.info("لا توجد بيانات مستثمرين لعرض التحليلات البيانية. قم بإضافة مستثمرين أولاً.")
 
     with tab_inv2:
-        st.subheader("📋 جدول تفاصيل حصص الاستثمار والأرباح")
+        st.subheader("جدول تفاصيل حصص الاستثمار والأرباح")
         
         if not df_raw_inv.empty:
             df_display = pd.DataFrame({
@@ -844,7 +1012,7 @@ elif menu == "أسهم المستثمرين":
                 df_display,
                 column_config={
                     "ID": st.column_config.NumberColumn("ID", format="%d"),
-                    "المستثمر": st.column_config.TextColumn("اسم المستثمر", help="اسم الشريك المسجل"),
+                    "المستثمر": st.column_config.TextColumn("اسم المستثمر"),
                     "كود العقار": st.column_config.TextColumn("العقار"),
                     "تكلفة العقار": st.column_config.NumberColumn("التكلفة الإجمالية", format="%.0f ج.م"),
                     "سعر البيع": st.column_config.NumberColumn("البيع المستهدف", format="%.0f ج.م"),
@@ -858,7 +1026,7 @@ elif menu == "أسهم المستثمرين":
                 hide_index=True
             )
 
-            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True)
             
             col_del1, col_del2 = st.columns([2, 1])
             with col_del1:
@@ -866,7 +1034,7 @@ elif menu == "أسهم المستثمرين":
             with col_del2:
                 st.write("")
                 st.write("")
-                if st.button("🗑️ حذف سجل المستثمر المحدد", use_container_width=True, key="inv_del_btn"):
+                if st.button("حذف سجل المستثمر المحدد", use_container_width=True, key="inv_del_btn"):
                     conn = get_connection()
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM investors WHERE id = ?", (inv_to_del,))
@@ -878,7 +1046,7 @@ elif menu == "أسهم المستثمرين":
             st.info("لا يوجد مستثمرون مسجلون حالياً.")
 
     with tab_inv3:
-        st.subheader("➕ ربط مستثمر جديد بعقار")
+        st.subheader("ربط مستثمر جديد بعقار")
         conn = get_connection()
         df_props_list = pd.read_sql_query("SELECT prop_code, prop_type, total_price, selling_price FROM properties", conn)
         conn.close()
@@ -895,7 +1063,7 @@ elif menu == "أسهم المستثمرين":
                     share_percentage = st.number_input("نسبة الشراكة من صافي الأرباح (%)", min_value=0.0, max_value=100.0, step=0.5)
                     invested_amount = st.number_input("المبلغ المدفوع / المستثمر (ج.م)", min_value=0.0, step=5000.0)
                 
-                submit_inv = st.form_submit_button("💾 حفظ بيانات الشراكة")
+                submit_inv = st.form_submit_button("حفظ بيانات الشراكة")
                 if submit_inv:
                     if investor_name.strip() != "":
                         conn = get_connection()
@@ -917,7 +1085,7 @@ elif menu == "أسهم المستثمرين":
 # 11. إدارة المستخدمين
 # ---------------------------------------------------------
 elif menu == "إدارة المستخدمين والصلاحيات":
-    st.header("🔐 إدارة المستخدمين والصلاحيات")
+    st.header("إدارة المستخدمين والصلاحيات")
     
     tab_u1, tab_u2 = st.tabs(["إضافة مستخدم جديد", "عرض المستخدمين وحذفهم"])
     
@@ -967,7 +1135,7 @@ elif menu == "إدارة المستخدمين والصلاحيات":
 # 12. الملف الشخصي
 # ---------------------------------------------------------
 elif menu == "الملف الشخصي":
-    st.header("👤 الملف الشخصي وإدارة الحساب")
+    st.header("الملف الشخصي وإدارة الحساب")
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -1030,7 +1198,7 @@ elif menu == "الملف الشخصي":
 # 13. رفع وإدارة المستندات والعقود
 # ---------------------------------------------------------
 elif menu == "رفع المستندات":
-    st.header("📁 مركز أرشفة وإدارة المستندات والعقود")
+    st.header("مركز أرشفة وإدارة المستندات والعقود")
     
     with st.form("upload_doc_form", clear_on_submit=True):
         col_u1, col_u2 = st.columns(2)
@@ -1046,7 +1214,7 @@ elif menu == "رفع المستندات":
             ])
             doc_description = st.text_input("ملاحظات / وصف مختصر للمستند")
             
-        submit_upload = st.form_submit_button("📤 رفع وحفظ المستند")
+        submit_upload = st.form_submit_button("رفع وحفظ المستند")
         
         if submit_upload:
             if uploaded_file is not None:
@@ -1070,8 +1238,8 @@ elif menu == "رفع المستندات":
             else:
                 st.warning("يرجى اختيار ملف أولاً قبل الضغط على حفظ.")
 
-    st.divider()
-    st.subheader("📄 المستندات والعقود المرفوعة")
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader("المستندات والعقود المرفوعة")
     
     if os.path.exists("uploads"):
         files = os.listdir("uploads")
@@ -1082,7 +1250,7 @@ elif menu == "رفع المستندات":
                 
                 meta = st.session_state.get('docs_meta', {}).get(file, {"type": "غير محدد", "desc": "-"})
                 
-                with st.expander(f"📁 {file}  |  🏷️ **التصنيف:** {meta['type']}"):
+                with st.expander(f"📁 {file}  |  التصنيف: {meta['type']}"):
                     col_info, col_actions = st.columns([2, 1])
                     
                     with col_info:
@@ -1093,14 +1261,15 @@ elif menu == "رفع المستندات":
                     with col_actions:
                         with open(file_path, "rb") as f:
                             st.download_button(
-                                label="💾 تنزيل المستند",
+                                label="تنزيل المستند",
                                 data=f,
                                 file_name=file,
                                 mime="application/octet-stream",
-                                key=f"down_{file}"
+                                key=f"down_{file}",
+                                use_container_width=True
                             )
                         
-                        if st.button("🗑️ حذف المستند", key=f"del_file_{file}"):
+                        if st.button("حذف المستند", key=f"del_file_{file}", use_container_width=True):
                             os.remove(file_path)
                             if 'docs_meta' in st.session_state and file in st.session_state['docs_meta']:
                                 del st.session_state['docs_meta'][file]
@@ -1108,11 +1277,11 @@ elif menu == "رفع المستندات":
                             st.rerun()
 
                     st.markdown("---")
-                    st.caption("🔍 **معاينة المستند:**")
+                    st.caption("معاينة المستند:")
                     if file_ext in ['.png', '.jpg', '.jpeg']:
                         st.image(file_path, use_container_width=True)
                     elif file_ext == '.pdf':
-                        st.info("📄 ملف PDF جاهز للتحميل عبر الزر أعلاه (أو يمكنك معاينته عبر المتصفح).")
+                        st.info("ملف PDF جاهز للتحميل عبر الزر أعلاه.")
         else:
             st.info("لا توجد مستندات مرفوعة حالياً.")
     else:
