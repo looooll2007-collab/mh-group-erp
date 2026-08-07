@@ -1,8 +1,6 @@
 import streamlit as st
-import sqlite3
-import pandas as pd
 
-# 1. إعدادات الصفحة
+# 1. تهيئة إعدادات الصفحة
 st.set_page_config(
     page_title="MH GROUP ERP",
     page_icon="🏢",
@@ -10,10 +8,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. كود الـ CSS الشامل (تعديل الألوان والتصاميم بدون تعطيل عناصر Streamlit)
+# 2. كود الـ CSS الأنيق مع إصلاح مشكلة الإدخال وأيقونة الباسورد
 custom_css = """
 <style>
-/* الاتجاه العام واللون الخلفي */
+/* 1. الاتجاه العام والألوان الداكنة */
 html, body, [data-testid="stAppViewContainer"] {
     direction: rtl;
     text-align: right;
@@ -31,7 +29,7 @@ html, body, [data-testid="stAppViewContainer"] {
     border-left: 1px solid #30363d !important;
 }
 
-/* الأزرار الرئيسية */
+/* 2. الأزرار الرئيسية */
 .stButton > button {
     background-color: #d4af37 !important;
     color: #0d1117 !important;
@@ -48,7 +46,7 @@ html, body, [data-testid="stAppViewContainer"] {
     box-shadow: 0 0 10px rgba(212, 175, 55, 0.4) !important;
 }
 
-/* إصلاح حقول الإدخال ومنع طفح كلمة visibility/visibili */
+/* 3. إصلاح حقول الإدخال ومنع طفح كلمة visibility/visibili */
 div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
     background-color: #161b22 !important;
     border: 1px solid #30363d !important;
@@ -60,7 +58,7 @@ div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea {
     background-color: transparent !important;
 }
 
-/* إصلاح أيقونة إظهار/إخفاء كلمة المرور */
+/* 4. إخفاء النص المسرب خلف أيقونة إظهار كلمة المرور */
 button[aria-label="Show password"], 
 button[aria-label="Hide password"],
 [data-aria-label="Show password"] {
@@ -73,7 +71,7 @@ button[aria-label="Hide password"] * {
     font-size: 0 !important;
 }
 
-/* جداول البيانات والعناوين */
+/* 5. جداول البيانات والعناوين */
 [data-testid="stDataFrame"] {
     background-color: #161b22 !important;
     border: 1px solid #30363d !important;
@@ -93,7 +91,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# قائمة الحسابات المصرح لها
+# قائمة الحسابات المسموح لها بالدخول
 USERS_DB = {
     "admin": "123456",
     "admin@mhgroup.com": "123456"
