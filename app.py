@@ -1,313 +1,555 @@
 import streamlit as st
-import pandas as pd
 import sqlite3
-import datetime
+import pandas as pd
+import io
 
-# --- 1. إعدادات الصفحة والتصاميم لمود النهار والليل ---
+# ---------------------------------------------------------
+# 1. إعدادات الصفحة والتصميم CSS المعدل
+# ---------------------------------------------------------
 st.set_page_config(
-    page_title="MH Group ERP System",
+    page_title="MH GROUP ERP",
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# تحسين رؤية النصوص داخل النمطين (Dark / Light Theme)
-st.markdown("""
+custom_css = """
 <style>
-    .main-header {
-        font-size: 2.2rem;
-        font-weight: bold;
-        color: #1E3A8A;
-        text-align: center;
-        margin-bottom: 25px;
-    }
-    .stButton>button {
-        background-color: #1E3A8A;
-        color: white;
-        border-radius: 8px;
-        font-weight: bold;
-    }
-    .stMetric {
-        background-color: rgba(30, 58, 138, 0.08);
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid rgba(30, 58, 138, 0.2);
-    }
-</style>
-""", unsafe_allow_html=True)
+/* اتجاه الصفحة والألوان الأساسية */
+html, body, [data-testid="stAppViewContainer"] {
+    direction: rtl;
+    text-align: right;
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+}
 
-# --- 2. تهيئة قاعدة البيانات المحلية ---
+[data-testid="stHeader"] {
+    background-color: transparent !important;
+}
+
+[data-testid="stSidebar"] {
+    background-color: #161b22 !important;
+    border-left: 1px solid #30363d !important;
+}
+
+/* الأزرار الذهبية */
+.stButton > button {
+    background-color: #d4af37 !important;
+    color: #0d1117 !important;
+    font-weight: bold !important;
+    border-radius: 8px !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.3s ease !important;
+    width: 100% !important;
+}
+
+.stButton > button:hover {
+    background-color: #f1c40f !important;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.4) !important;
+}
+
+/* إصلاح الإدخالات ومنع كلمة visibili */
+div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
+    background-color: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 8px !important;
+}
+
+div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea {
+    color: #ffffff !important;
+    background-color: transparent !important;
+}
+
+/* إخفاء وتجميل أيقونة إظهار كلمة المرور */
+button[aria-label="Show password"], 
+button[aria-label="Hide password"],
+[data-aria-label="Show password"] {
+    color: #8b949e !important;
+    background: transparent !important;
+}
+
+button[aria-label="Show password"] *, 
+button[aria-label="Hide password"] * {
+    font-size: 0 !important;
+}
+
+/* جداول البيانات */
+[data-testid="stDataFrame"] {
+    background-color: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 10px !important;
+}
+
+h1, h2, h3, h4 {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# 2. إعداد وقواعد البيانات SQLite
+# ---------------------------------------------------------
+DB_FILE = "mh_group_erp.db"
+
+def get_connection():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
 def init_db():
-    conn = sqlite3.connect("mh_group_erp.db")
+    conn = get_connection()
     cursor = conn.cursor()
     
-    # جدول المستخدمين
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            role TEXT
-        )
-    ''')
+    # 1. جدول المستخدمين والصلاحيات
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT NOT NULL,
+        email TEXT,
+        status TEXT DEFAULT 'نشط'
+    )
+    """)
     
-    # إضافة حساب المسؤول الافتراضي في حال عدم وجوده
+    # 2. جدول الموظفين والمرتبات والسلف
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS employees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        emp_code TEXT UNIQUE,
+        full_name TEXT NOT NULL,
+        department TEXT,
+        position TEXT,
+        base_salary REAL,
+        advances REAL DEFAULT 0,
+        deductions REAL DEFAULT 0,
+        bonuses REAL DEFAULT 0
+    )
+    """)
+    
+    # 3. جدول أسهم المستثمرين والأرباح
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investor_code TEXT UNIQUE,
+        full_name TEXT NOT NULL,
+        phone TEXT,
+        shares_count INTEGER DEFAULT 0,
+        share_value REAL DEFAULT 0,
+        total_investment REAL DEFAULT 0,
+        join_date DATE DEFAULT CURRENT_DATE
+    )
+    """)
+
+    # 4. جدول توزيع الأرباح على المستثمرين
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS profit_distributions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investor_id INTEGER,
+        payout_date DATE DEFAULT CURRENT_DATE,
+        amount_paid REAL,
+        notes TEXT,
+        FOREIGN KEY(investor_id) REFERENCES investors(id)
+    )
+    """)
+    
+    # 5. جدول المالية والتدفقات
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS financial_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trans_date DATE DEFAULT CURRENT_DATE,
+        trans_type TEXT,
+        category TEXT,
+        amount REAL,
+        description TEXT
+    )
+    """)
+    
+    # 6. جدول المخزون العقاري
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS real_estate_inventory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        unit_code TEXT UNIQUE,
+        project_name TEXT,
+        unit_type TEXT,
+        price REAL,
+        status TEXT DEFAULT 'متاحة'
+    )
+    """)
+
+    # 7. جدول المستندات
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_name TEXT,
+        file_type TEXT,
+        uploaded_by TEXT,
+        upload_date DATE DEFAULT CURRENT_DATE
+    )
+    """)
+    
+    # إضافة حساب المسؤول الرئيسي افتراضياً
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
-        cursor.execute("INSERT INTO users (username, password, role) VALUES ('admin', 'admin123', 'Admin')")
+        cursor.execute("INSERT INTO users (username, password, role, email) VALUES ('admin', '123456', 'مدير النظام', 'admin@mhgroup.com')")
         
-    # جدول العقارات
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS properties (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            location TEXT,
-            price REAL,
-            status TEXT
-        )
-    ''')
-    
-    # جدول الموظفين
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            position TEXT,
-            salary REAL,
-            hire_date TEXT
-        )
-    ''')
-    
-    # جدول المستثمرين
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS investors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            investment_amount REAL,
-            return_rate REAL,
-            start_date TEXT
-        )
-    ''')
-
-    # جدول الدعم الفني IT
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS it_tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            category TEXT,
-            status TEXT,
-            created_at TEXT
-        )
-    ''')
-    
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- 3. إدارة الجلسة والدخول ---
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-if "user_role" not in st.session_state:
-    st.session_state["user_role"] = ""
+# ---------------------------------------------------------
+# 3. إدارة جلسة التسجيل
+# ---------------------------------------------------------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+if "role" not in st.session_state:
+    st.session_state.role = ""
 
+# ---------------------------------------------------------
+# 4. صفحة تسجيل الدخول
+# ---------------------------------------------------------
 def login_page():
-    st.markdown("<h1 class='main-header'>🏢 نظام إدارة MH Group ERP</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>MH GROUP للاستثمار والتطوير العقاري</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #8b949e !important;'>نظام إدارة الموارد المؤسسية (ERP)</h3>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.subheader("🔐 تسجيل الدخول")
-        username = st.text_input("اسم المستخدم", value="admin")
-        password = st.text_input("كلمة المرور", type="password", value="admin123")
-        login_btn = st.button("دخول إلى النظام", use_container_width=True)
+        username_input = st.text_input("اسم المستخدم أو البريد الإلكتروني")
+        password_input = st.text_input("كلمة المرور", type="password")
         
-        if login_btn:
-            conn = sqlite3.connect("mh_group_erp.db")
+        if st.button("تسجيل الدخول"):
+            u = username_input.strip()
+            p = password_input.strip()
+            
+            conn = get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT role FROM users WHERE username = ? AND password = ?", (username, password))
-            res = cursor.fetchone()
+            cursor.execute("SELECT * FROM users WHERE (username=? OR email=?) AND password=?", (u, u, p))
+            user = cursor.fetchone()
             conn.close()
             
-            if res:
-                st.session_state["logged_in"] = True
-                st.session_state["user_role"] = res[0]
+            if user:
+                st.session_state.authenticated = True
+                st.session_state.username = user["username"]
+                st.session_state.role = user["role"]
                 st.success("تم تسجيل الدخول بنجاح!")
                 st.rerun()
             else:
-                st.error("بيانات الدخول غير صحيحة! استخدم: (admin / admin123)")
+                st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
 
-# --- 4. التوجيه وحالة الجلسة ---
-if not st.session_state["logged_in"]:
-    login_page()
-else:
-    # القائمة الجانبية
-    st.sidebar.title("🏢 MH Group ERP")
-    st.sidebar.markdown("**المستخدم الحالي:** Administrator")
+# ---------------------------------------------------------
+# 5. النظام الرئيسي والتوجيه بين الأقسام
+# ---------------------------------------------------------
+def main_app():
+    st.sidebar.markdown(f"### 🏢 MH GROUP ERP")
+    st.sidebar.write(f"مرحباً بك: **{st.session_state.username}**")
+    st.sidebar.caption(f"الصلاحية: {st.session_state.role}")
+    st.sidebar.markdown("---")
     
-    page = st.sidebar.radio("القطاعات والأقسام", [
-        "لوحة التحكم الرئيسية",
-        "إدارة العقارات والوحدات",
-        "الموارد البشرية والعمالة (HR)",
-        "قسم المستثمرين والمالية",
-        "تقنية المعلومات (IT Support)",
-        "التقارير والمستندات"
+    menu = st.sidebar.radio("القائمة الرئيسية", [
+        "لوحة التحكم (Dashboard)",
+        "أسهم المستثمرين والأرباح",
+        "الموارد البشرية (HR)",
+        "الحسابات والمالية",
+        "حالة المخزون العقاري",
+        "إدارة المستخدمين والصلاحيات",
+        "مركز رفع المستندات",
+        "الملف الشخصي"
     ])
     
     if st.sidebar.button("تسجيل الخروج"):
-        st.session_state["logged_in"] = False
+        st.session_state.authenticated = False
+        st.session_state.username = ""
+        st.session_state.role = ""
         st.rerun()
 
-    # --- الصفحة الرئيسية ---
-    if page == "لوحة التحكم الرئيسية":
-        st.title("📊 لوحة التحكم والإحصائيات")
-        
+    st.title(f"قسم: {menu}")
+    st.markdown("---")
+
+    conn = get_connection()
+
+    # --- 1. لوحة التحكم (Dashboard) ---
+    if menu == "لوحة التحكم (Dashboard)":
         c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.metric("إجمالي الوحدات", "24 وحدة")
-        with c2:
-            st.metric("عدد الموظفين", "15 موظف")
-        with c3:
-            st.metric("حجم الاستثمارات", "12.5M EGP")
-        with c4:
-            st.metric("تذاكر IT مفتوحة", "3 تذاكر")
-
-        st.subheader("📈 نظرة عامة على الأداء المالي")
-        df_dummy = pd.DataFrame({
-            "الشهر": ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو"],
-            "المبيعات": [1200000, 1500000, 1800000, 1400000, 2100000, 2500000],
-            "المصروفات": [400000, 450000, 500000, 480000, 520000, 600000]
-        })
-        st.line_chart(df_dummy.set_index("الشهر"))
-
-    # --- إدارة العقارات ---
-    elif page == "إدارة العقارات والوحدات":
-        st.title("🏡 إدارة العقارات والوحدات")
         
-        st.subheader("إضافة وحدة جديدة")
-        with st.form("add_prop_form"):
-            name = st.text_input("اسم العقار / رقم الوحدة")
-            location = st.text_input("الموقع")
-            price = st.number_input("السعر المقدر", min_value=0.0, step=50000.0)
-            status = st.selectbox("الحالة", ["متاح", "تم البيع", "تحت الإنشاء", "محجوز"])
-            submitted = st.form_submit_button("حفظ العقار")
+        total_emp = pd.read_sql_query("SELECT COUNT(*) as count FROM employees", conn).iloc[0]['count']
+        total_investors = pd.read_sql_query("SELECT COUNT(*) as count FROM investors", conn).iloc[0]['count']
+        total_shares = pd.read_sql_query("SELECT SUM(shares_count) as total FROM investors", conn).iloc[0]['total'] or 0
+        total_capital = pd.read_sql_query("SELECT SUM(total_investment) as total FROM investors", conn).iloc[0]['total'] or 0
+        
+        c1.metric("عدد الموظفين", total_emp)
+        c2.metric("عدد المستثمرين", total_investors)
+        c3.metric("إجمالي الأسهم", total_shares)
+        c4.metric("رأس المال المستثمر", f"{total_capital:,.0f} ج.م")
+        
+        st.markdown("### ملخص أحدث العمليات المالية")
+        df_fin = pd.read_sql_query("SELECT trans_date as التاريخ, trans_type as النوع, category as التصنيف, amount as المبلغ, description as البيان FROM financial_transactions ORDER BY id DESC LIMIT 5", conn)
+        st.dataframe(df_fin, use_container_width=True)
+
+    # --- 2. قسم أسهم المستثمرين والأرباح ---
+    elif menu == "أسهم المستثمرين والأرباح":
+        st.subheader("إدارة المستثمرين ورأس المال والأرباح")
+        
+        tab_inv1, tab_inv2, tab_inv3 = st.tabs(["قائمة المستثمرين", "إضافة مستثمر جديد", "تسجيل توزيع أرباح"])
+        
+        with tab_inv1:
+            df_inv = pd.read_sql_query("""
+                SELECT 
+                    investor_code as كود_المستثمر,
+                    full_name as اسم_المستثمر,
+                    phone as الهاتف,
+                    shares_count as عدد_الأسهم,
+                    share_value as قيمة_السهم,
+                    total_investment as إجمالي_الاستثمار,
+                    join_date as تاريخ_الانضمام
+                FROM investors
+            """, conn)
+            st.dataframe(df_inv, use_container_width=True)
             
-            if submitted and name:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO properties (name, location, price, status) VALUES (?, ?, ?, ?)",
-                               (name, location, price, status))
-                conn.commit()
-                conn.close()
-                st.success("تم تسجيل العقار بنجاح!")
+            if not df_inv.empty:
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_inv.to_excel(writer, index=False, sheet_name='Investors')
+                st.download_button("تصدير سجل المستثمرين Excel 📊", data=buffer.getvalue(), file_name="investors_report.xlsx", mime="application/vnd.ms-excel")
 
-        st.subheader("سجل الوحدات المسجلة")
-        conn = sqlite3.connect("mh_group_erp.db")
-        props_df = pd.read_sql_query("SELECT * FROM properties", conn)
-        conn.close()
-        st.dataframe(props_df, use_container_width=True)
+        with tab_inv2:
+            with st.form("add_investor_form"):
+                inv_code = st.text_input("كود المستثمر (مثال: INV-01)")
+                inv_name = st.text_input("اسم المستثمر بالكامل")
+                inv_phone = st.text_input("رقم الهاتف")
+                shares_cnt = st.number_input("عدد الأسهم", min_value=1, value=1, step=1)
+                sh_val = st.number_input("قيمة السهم الواحد (ج.م)", min_value=0.0, value=10000.0)
+                
+                total_inv_calc = shares_cnt * sh_val
+                st.info(f"إجمالي قيمة الاستثمار المحسوبة: **{total_inv_calc:,.2f} ج.م**")
+                
+                if st.form_submit_button("حفظ المستثمر"):
+                    if inv_code and inv_name:
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("""
+                                INSERT INTO investors (investor_code, full_name, phone, shares_count, share_value, total_investment)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (inv_code, inv_name, inv_phone, shares_cnt, sh_val, total_inv_calc))
+                            
+                            # تسجيل الحركة كمصدر إيراد مالي
+                            cursor.execute("""
+                                INSERT INTO financial_transactions (trans_type, category, amount, description)
+                                VALUES ('إيراد', 'رأس مال مستثمر', ?, ?)
+                            """, (total_inv_calc, f"استثمار جديد للمستثمر {inv_name} ({shares_cnt} سهم)"))
+                            
+                            conn.commit()
+                            st.success("تم تسجيل المستثمر وإضافة المبلغ للمالية بنجاح!")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("كود المستثمر مسجل مسبقاً!")
+                    else:
+                        st.warning("يرجى إدخال كافة البيانات الأساسية")
 
-    # --- إدارة الموارد البشرية ---
-    elif page == "الموارد البشرية والعمالة (HR)":
-        st.title("👥 إدارة الموارد البشرية والعمالة")
-        
-        st.subheader("تسجيل موظف جديد")
-        with st.form("add_emp_form"):
-            emp_name = st.text_input("اسم الموظف")
-            position = st.text_input("الوظيفة")
-            salary = st.number_input("الراتب الشهرى", min_value=0.0, step=1000.0)
-            hire_date = st.date_input("تاريخ التعيين")
-            submitted_emp = st.form_submit_button("إضافة الموظف")
+        with tab_inv3:
+            st.markdown("#### تسجيل صرف أرباح لمستثمر")
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, full_name, investor_code FROM investors")
+            all_invs = cursor.fetchall()
             
-            if submitted_emp and emp_name:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO employees (name, position, salary, hire_date) VALUES (?, ?, ?, ?)",
-                               (emp_name, position, salary, str(hire_date)))
-                conn.commit()
-                conn.close()
-                st.success("تمت إضافة الموظف بنجاح!")
+            if all_invs:
+                inv_options = {f"{inv['full_name']} ({inv['investor_code']})": inv['id'] for inv in all_invs}
+                selected_inv = st.selectbox("اختر المستثمر", list(inv_options.keys()))
+                payout_amt = st.number_input("مبلغ الأرباح الموزعة (ج.م)", min_value=0.0)
+                payout_notes = st.text_input("ملاحظات / الربع السنوي")
+                
+                if st.button("تسجيل صرف الأرباح"):
+                    if payout_amt > 0:
+                        inv_id = inv_options[selected_inv]
+                        cursor.execute("INSERT INTO profit_distributions (investor_id, amount_paid, notes) VALUES (?,?,?)", (inv_id, payout_amt, payout_notes))
+                        
+                        # تسجيل الخصم المالي في الحسابات
+                        cursor.execute("INSERT INTO financial_transactions (trans_type, category, amount, description) VALUES ('مصروف', 'توزيع أرباح مستثمرين', ?, ?)", (payout_amt, f"صرف أرباح للمستثمر {selected_inv} - {payout_notes}"))
+                        
+                        conn.commit()
+                        st.success("تم تسجيل توزيع الأرباح وخصمها من الحسابات المالية!")
+                        st.rerun()
+            else:
+                st.info("لا يوجد مستثمرون مسجلون حالياً")
 
-        st.subheader("سجل الموظفين الحاليين")
-        conn = sqlite3.connect("mh_group_erp.db")
-        emp_df = pd.read_sql_query("SELECT * FROM employees", conn)
-        conn.close()
-        st.dataframe(emp_df, use_container_width=True)
+            st.markdown("---")
+            st.markdown("#### سجل توزيع الأرباح السابق")
+            df_payouts = pd.read_sql_query("""
+                SELECT 
+                    i.full_name as اسم_المستثمر,
+                    p.payout_date as تاريخ_الصرف,
+                    p.amount_paid as المبلغ_المدفوع,
+                    p.notes as ملاحظات
+                FROM profit_distributions p
+                JOIN investors i ON p.investor_id = i.id
+                ORDER BY p.id DESC
+            """, conn)
+            st.dataframe(df_payouts, use_container_width=True)
 
-    # --- قسم المستثمرين ---
-    elif page == "قسم المستثمرين والمالية":
-        st.title("💼 قسم المستثمرين والمؤشرات المالية")
+    # --- 3. الموارد البشرية (HR) ---
+    elif menu == "الموارد البشرية (HR)":
+        st.subheader("إدارة الموظفين والرواتب والسُلف")
         
-        st.subheader("إضافة بيانات مستثمر")
-        with st.form("add_investor_form"):
-            inv_name = st.text_input("اسم المستثمر")
-            inv_amount = st.number_input("مبلغ الاستثمار", min_value=0.0, step=100000.0)
-            inv_rate = st.number_input("نسبة العائد (%)", min_value=0.0, max_value=100.0, step=1.0)
-            start_d = st.date_input("تاريخ البداية")
-            submit_inv = st.form_submit_button("حفظ المستثمر")
+        tab1, tab2 = st.tabs(["قائمة الموظفين والرواتب", "إضافة موظف جديد"])
+        
+        with tab1:
+            df_emp = pd.read_sql_query("SELECT emp_code as الكود, full_name as الاسم, department as القسم, position as الوظيفة, base_salary as الراتب_الأساسي, bonuses as المكافآت, deductions as الخصومات, advances as السُلف FROM employees", conn)
+            st.dataframe(df_emp, use_container_width=True)
             
-            if submit_inv and inv_name:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO investors (name, investment_amount, return_rate, start_date) VALUES (?, ?, ?, ?)",
-                               (inv_name, inv_amount, inv_rate, str(start_d)))
-                conn.commit()
-                conn.close()
-                st.success("تم تسجيل المستثمر بنجاح!")
+            if not df_emp.empty:
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_emp.to_excel(writer, index=False, sheet_name='Employees')
+                st.download_button("تصدير تقرير الموظفين Excel 📊", data=buffer.getvalue(), file_name="employees_report.xlsx", mime="application/vnd.ms-excel")
 
-        st.subheader("قائمة المستثمرين")
-        conn = sqlite3.connect("mh_group_erp.db")
-        inv_df = pd.read_sql_query("SELECT * FROM investors", conn)
-        conn.close()
-        st.dataframe(inv_df, use_container_width=True)
+        with tab2:
+            with st.form("add_emp_form"):
+                code = st.text_input("كود الموظف")
+                name = st.text_input("الاسم بالكامل")
+                dept = st.text_input("القسم")
+                pos = st.text_input("المسمى الوظيفي")
+                salary = st.number_input("الراتب الأساسي", min_value=0.0)
+                
+                if st.form_submit_button("حفظ الموظف"):
+                    if code and name:
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("INSERT INTO employees (emp_code, full_name, department, position, base_salary) VALUES (?,?,?,?,?)", (code, name, dept, pos, salary))
+                            conn.commit()
+                            st.success("تم إضافة الموظف بنجاح!")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("كود الموظف مسجل مسبقاً!")
+                    else:
+                        st.warning("يرجى ملء كافة البيانات الأساسية")
 
-    # --- قسم IT Support ---
-    elif page == "تقنية المعلومات (IT Support)":
-        st.title("💻 قسم تقنية المعلومات والدعم الفني")
+    # --- 4. الحسابات والمالية ---
+    elif menu == "الحسابات والمالية":
+        st.subheader("إدارة الحركة المالية والتسجيل")
         
-        st.subheader("فتح تذكرة دعم فني جديدة")
-        with st.form("add_ticket_form"):
-            t_title = st.text_input("عنوان الطلب / المشكلة")
-            t_cat = st.selectbox("التصنيف", ["شبكات وأنظمة", "برمجيات ERP", "أجهزة ومعدات", "صلاحيات"])
-            t_status = st.selectbox("الحالة", ["جديد", "قيد المعالجة", "مغلق"])
-            submit_t = st.form_submit_button("إرسال التذكرة")
+        col_f1, col_f2 = st.columns([1, 2])
+        
+        with col_f1:
+            st.markdown("#### إضافة قيد جديد")
+            t_type = st.selectbox("نوع الحركة", ["إيراد", "مصروف"])
+            cat = st.text_input("التصنيف (مثال: مبيعات, صيانة, رواتب)")
+            amt = st.number_input("المبلغ (ج.م)", min_value=0.0)
+            desc = st.text_area("البيان / الوصف")
             
-            if submit_t and t_title:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                cursor.execute("INSERT INTO it_tickets (title, category, status, created_at) VALUES (?, ?, ?, ?)",
-                               (t_title, t_cat, t_status, now_str))
+            if st.button("تسجيل القيد"):
+                if amt > 0:
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT INTO financial_transactions (trans_type, category, amount, description) VALUES (?,?,?,?)", (t_type, cat, amt, desc))
+                    conn.commit()
+                    st.success("تم تسجيل القيد بنجاح!")
+                    st.rerun()
+                else:
+                    st.warning("يرجى إدخال مبلغ صحيح")
+                    
+        with col_f2:
+            st.markdown("#### سجل الحركات المالية")
+            df_trans = pd.read_sql_query("SELECT id as الرقم, trans_date as التاريخ, trans_type as النوع, category as التصنيف, amount as المبلغ, description as الوصف FROM financial_transactions ORDER BY id DESC", conn)
+            st.dataframe(df_trans, use_container_width=True)
+
+    # --- 5. حالة المخزون العقاري ---
+    elif menu == "حالة المخزون العقاري":
+        st.subheader("إدارة الوحدات والعقارات")
+        
+        t_u1, t_u2 = st.tabs(["سجل الوحدات العقارية", "إضافة وحدة جديدة"])
+        
+        with t_u1:
+            df_units = pd.read_sql_query("SELECT unit_code as كود_الوحدة, project_name as اسم_المشروع, unit_type as النوع, price as السعر, status as الحالة FROM real_estate_inventory", conn)
+            st.dataframe(df_units, use_container_width=True)
+            
+        with t_u2:
+            with st.form("add_unit_form"):
+                u_code = st.text_input("كود الوحدة")
+                p_name = st.text_input("اسم المشروع")
+                u_type = st.selectbox("نوع الوحدة", ["سكني", "تجاري", "إداري", "أرض"])
+                price = st.number_input("سعر الوحدة", min_value=0.0)
+                status = st.selectbox("الحالة", ["متاحة", "محجوزة", "تم البيع"])
+                
+                if st.form_submit_button("حفظ الوحدة"):
+                    if u_code and p_name:
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("INSERT INTO real_estate_inventory (unit_code, project_name, unit_type, price, status) VALUES (?,?,?,?,?)", (u_code, p_name, u_type, price, status))
+                            conn.commit()
+                            st.success("تم حفظ الوحدة بنجاح!")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("كود الوحدة مسجل بالفعل!")
+
+    # --- 6. إدارة المستخدمين والصلاحيات ---
+    elif menu == "إدارة المستخدمين والصلاحيات":
+        st.subheader("سجل مستخدمي النظام والصلاحيات")
+        
+        df_users = pd.read_sql_query("SELECT id, username as اسم_المستخدم, role as الصلاحية, email as البريد_الإلكتروني, status as الحالة FROM users", conn)
+        st.dataframe(df_users, use_container_width=True)
+        
+        st.markdown("### إضافة مستخدم جديد")
+        with st.form("add_user"):
+            u_name = st.text_input("اسم المستخدم")
+            u_pass = st.text_input("كلمة المرور", type="password")
+            u_role = st.selectbox("الصلاحية", ["مدير النظام", "موارد بشرية", "محاسب", "مبيعات"])
+            u_email = st.text_input("البريد الإلكتروني")
+            
+            if st.form_submit_button("إضافة"):
+                if u_name and u_pass:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("INSERT INTO users (username, password, role, email) VALUES (?,?,?,?)", (u_name, u_pass, u_role, u_email))
+                        conn.commit()
+                        st.success("تمت إضافة المستخدم بنجاح!")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("اسم المستخدم مسجل مسبقاً!")
+
+    # --- 7. مركز رفع المستندات ---
+    elif menu == "مركز رفع المستندات":
+        st.subheader("رفع وأرشفة المستندات والتقارير")
+        uploaded_file = st.file_uploader("اختر ملفاً لرفعه إلى النظام", type=["pdf", "xlsx", "docx", "jpg", "png"])
+        if uploaded_file is not None:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO documents (doc_name, file_type, uploaded_by) VALUES (?,?,?)", (uploaded_file.name, uploaded_file.type, st.session_state.username))
+            conn.commit()
+            st.success(f"تم رفع وأرشفة الملف: **{uploaded_file.name}** بنجاح!")
+            
+        st.markdown("### المستندات المؤرشفة مؤخراً")
+        df_docs = pd.read_sql_query("SELECT doc_name as اسم_الملف, file_type as النوع, uploaded_by as بواسطة, upload_date as تاريخ_الرفع FROM documents ORDER BY id DESC", conn)
+        st.dataframe(df_docs, use_container_width=True)
+
+    # --- 8. الملف الشخصي ---
+    elif menu == "الملف الشخصي":
+        st.subheader("إعدادات الحساب الشخصي")
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username=?", (st.session_state.username,))
+        curr_user = cursor.fetchone()
+        
+        if curr_user:
+            st.text_input("اسم المستخدم", value=curr_user["username"], disabled=True)
+            st.text_input("الصلاحية", value=curr_user["role"], disabled=True)
+            new_email = st.text_input("البريد الإلكتروني", value=curr_user["email"] or "")
+            new_pass = st.text_input("تحديث كلمة المرور", type="password", value=curr_user["password"])
+            
+            if st.button("تحديث البيانات"):
+                cursor.execute("UPDATE users SET email=?, password=? WHERE username=?", (new_email, new_pass, st.session_state.username))
                 conn.commit()
-                conn.close()
-                st.success("تم إرسال تذكرة IT بنجاح!")
+                st.success("تم تحديث بياناتك بنجاح!")
 
-        st.subheader("سجل التذاكر والدعم الفني")
-        conn = sqlite3.connect("mh_group_erp.db")
-        it_df = pd.read_sql_query("SELECT * FROM it_tickets", conn)
-        conn.close()
-        st.dataframe(it_df, use_container_width=True)
+    conn.close()
 
-    # --- التقارير والتصدير ---
-    elif page == "التقارير والمستندات":
-        st.title("📑 التقارير وتصدير البيانات")
-        report_type = st.selectbox("اختر التقرير المطلوب", ["العقارات", "الموظفين", "المستثمرين", "الدعم الفني IT"])
-        
-        conn = sqlite3.connect("mh_group_erp.db")
-        if report_type == "العقارات":
-            rep_df = pd.read_sql_query("SELECT * FROM properties", conn)
-        elif report_type == "الموظفين":
-            rep_df = pd.read_sql_query("SELECT * FROM employees", conn)
-        elif report_type == "المستثمرين":
-            rep_df = pd.read_sql_query("SELECT * FROM investors", conn)
-        else:
-            rep_df = pd.read_sql_query("SELECT * FROM it_tickets", conn)
-        conn.close()
-        
-        st.dataframe(rep_df, use_container_width=True)
-        csv_data = rep_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 تحميل التقرير بصيغة (CSV)",
-            data=csv_data,
-            file_name=f"{report_type}.csv",
-            mime="text/csv"
-        )
+# ---------------------------------------------------------
+# 6. التوجيه النهائي
+# ---------------------------------------------------------
+if not st.session_state.authenticated:
+    login_page()
+else:
+    main_app()
