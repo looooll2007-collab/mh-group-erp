@@ -1,6 +1,296 @@
+import streamlit as st
+import sqlite3
+import pandas as pd
+import plotly.express as px
+import os
+import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+
 # ---------------------------------------------------------
-# 6. Dashboard (اللوحة الرئيسية الاحترافية) - متابعة
+# 1. إعدادات الصفحة والتسجيل
 # ---------------------------------------------------------
+st.set_page_config(
+    page_title="MH Group ERP System",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ---------------------------------------------------------
+# 2. إعداد قاعدة البيانات (Database Setup)
+# ---------------------------------------------------------
+DB_FILE = "mh_group.db"
+
+def get_connection():
+    conn = sqlite3.connect(DB_FILE)
+    return conn
+
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # جدول المستخدمين
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            full_name TEXT,
+            email TEXT,
+            phone TEXT,
+            avatar_path TEXT,
+            role TEXT NOT NULL DEFAULT 'ادمن'
+        )
+    """)
+    
+    # إضافة الحساب الرئيسي الافتراضي إذا لم يكن موجوداً
+    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            INSERT INTO users (username, password, full_name, role)
+            VALUES ('admin', 'admin123', 'مدير النظام', 'ادمن')
+        """)
+
+    # جدول الموارد البشرية
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hr (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            type TEXT,
+            worker_category TEXT,
+            grade TEXT,
+            work_hours REAL DEFAULT 0,
+            hourly_rate REAL DEFAULT 0,
+            daily_rate REAL DEFAULT 0,
+            workers_count INTEGER DEFAULT 0
+        )
+    """)
+
+    # جدول المالية
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS finance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            category TEXT,
+            description TEXT,
+            date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # جدول السلف
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS advances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_code TEXT NOT NULL,
+            person_name TEXT,
+            amount REAL NOT NULL,
+            date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # جدول العقارات
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS properties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prop_code TEXT UNIQUE NOT NULL,
+            prop_type TEXT,
+            base_price REAL DEFAULT 0,
+            expenses REAL DEFAULT 0,
+            total_price REAL DEFAULT 0,
+            selling_price REAL DEFAULT 0,
+            status TEXT DEFAULT 'متاح'
+        )
+    """)
+
+    # جدول قسم IT
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS it_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_name TEXT,
+            work_hours REAL DEFAULT 0,
+            hourly_rate REAL DEFAULT 0
+        )
+    """)
+
+    # جدول الشركاء/المستثمرين
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS investors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            investor_name TEXT,
+            prop_code TEXT,
+            share_percentage REAL DEFAULT 0,
+            invested_amount REAL DEFAULT 0
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ---------------------------------------------------------
+# 3. إدارة جلسة التسجيل (Authentication & Session State)
+# ---------------------------------------------------------
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+if 'user_id' not in st.session_state:
+    st.session_state['user_id'] = None
+if 'username' not in st.session_state:
+    st.session_state['username'] = None
+if 'role' not in st.session_state:
+    st.session_state['role'] = None
+
+# دالة إنشاء ملف PDF للأجور
+def generate_payroll_pdf(df_payroll):
+    pdf_filename = "payroll_report.pdf"
+    doc = SimpleDocTemplate(pdf_filename, pagesize=A4)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        alignment=1,
+        spaceAfter=20
+    )
+    
+    elements.append(Paragraph("MH GROUP - Payroll Report", title_style))
+    elements.append(Spacer(1, 10))
+    
+    # تحويل البيانات إلى جدول ReportLab
+    table_data = [list(df_payroll.columns)]
+    for idx, row in df_payroll.iterrows():
+        table_data.append([str(val) for val in row.values])
+        
+    t = Table(table_data)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e1e2f")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#f8f9fa")),
+        ('GRID', (0,0), (-1,-1), 1, colors.grey)
+    ]))
+    
+    elements.append(t)
+    doc.build(elements)
+    return pdf_filename
+
+# ---------------------------------------------------------
+# 4. شاشة تسجيل الدخول
+# ---------------------------------------------------------
+if not st.session_state['logged_in']:
+    st.title("🏢 MH Group - نظام إدارة المؤسسة (ERP)")
+    st.subheader("تسجيل الدخول")
+    
+    with st.form("login_form"):
+        user_input = st.text_input("اسم المستخدم")
+        pass_input = st.text_input("كلمة المرور", type="password")
+        submit_btn = st.form_submit_button("دخول")
+        
+        if submit_btn:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, username, role FROM users WHERE username = ? AND password = ?", (user_input, pass_input))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if user:
+                st.session_state['logged_in'] = True
+                st.session_state['user_id'] = user[0]
+                st.session_state['username'] = user[1]
+                st.session_state['role'] = user[2]
+                st.success("تم تسجيل الدخول بنجاح!")
+                st.rerun()
+            else:
+                st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
+    st.stop()
+
+# ---------------------------------------------------------
+# 5. القائمة الجانبية والثيمات
+# ---------------------------------------------------------
+active_theme = {
+    'bg': '#121212',
+    'card': '#1e1e2f',
+    'text': '#ffffff',
+    'accent': '#64ffda'
+}
+
+with st.sidebar:
+    st.title("MH Group ERP")
+    st.write(f"مرحباً بك: **{st.session_state['username']}**")
+    st.caption(f"الصلاحية: {st.session_state['role']}")
+    st.markdown("---")
+    
+    menu = st.radio(
+        "القائمة الرئيسية",
+        [
+            "اللوحة الرئيسية",
+            "الملف الشخصي",
+            "إدارة المستخدمين والصلاحيات",
+            "رفع المستندات",
+            "الموارد البشرية (HR)",
+            "المالية والأجور",
+            "المخزون العقاري",
+            "قسم تكنولوجيا المعلومات (IT)",
+            "أسهم المستثمرين"
+        ]
+    )
+    
+    st.markdown("---")
+    if st.button("تسجيل الخروج"):
+        st.session_state['logged_in'] = False
+        st.session_state['user_id'] = None
+        st.session_state['username'] = None
+        st.session_state['role'] = None
+        st.rerun()
+
+# ---------------------------------------------------------
+# 6. اللوحة الرئيسية (Dashboard)
+# ---------------------------------------------------------
+if menu == "اللوحة الرئيسية":
+    st.header("📊 اللوحة الرئيسية والتحليلات")
+
+    # جلب البيانات
+    conn = get_connection()
+    df_fin = pd.read_sql_query("SELECT type as 'النوع', amount as 'المبلغ', category as 'التصنيف' FROM finance", conn)
+    df_prop = pd.read_sql_query("SELECT status FROM properties", conn)
+    df_emp = pd.read_sql_query("SELECT COUNT(*) as count FROM hr", conn)
+    conn.close()
+
+    # بطاقات الإحصائيات Top KPIs
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    total_income = df_fin[df_fin['النوع'] == 'إيراد']['المبلغ'].sum() if not df_fin.empty else 0
+    total_expense = df_fin[df_fin['النوع'] == 'مصروف']['المبلغ'].sum() if not df_fin.empty else 0
+    emp_count = df_emp['count'].iloc[0] if not df_emp.empty else 0
+    prop_count = len(df_prop) if not df_prop.empty else 0
+
+    kpi1.metric("إجمالي الإيرادات", f"{total_income:,.0f} ج.م")
+    kpi2.metric("إجمالي المصروفات", f"{total_expense:,.0f} ج.م")
+    kpi3.metric("صافي الأرباح", f"{(total_income - total_expense):,.0f} ج.م")
+    kpi4.metric("عدد العمالة / العقارات", f"{emp_count} / {prop_count}")
+
+    st.markdown("---")
+
+    col_chart1, col_chart2 = st.columns(2)
+
+    with col_chart1:
+        st.subheader("الرسم البياني للمالية (إيرادات ومصروفات)")
+        if not df_fin.empty:
+            fig1 = px.bar(
+                df_fin,
+                x='التصنيف',
+                y='المبلغ',
+                color='النوع',
+                barmode='group',
+                color_discrete_map={'إيراد': '#64ffda', 'مصروف': '#ff007f'}
             )
             fig1.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
