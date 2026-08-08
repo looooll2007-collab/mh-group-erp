@@ -60,20 +60,23 @@ THEMES = {
     }
 }
 
-active_theme = THEMES[st.session_state['current_theme']]
+active_theme = THEMES.get(st.session_state['current_theme'], THEMES['Executive Dark Gold'])
 
-# كود التنسيق الشامل + حجب تلميحات الاختصارات عند مرور الماوس
+# كود التنسيق الشامل + حجب تلميحات الاختصارات والدبل عند مرور الماوس
 st.markdown(f"""
     <style>
-    /* 0. إلغاء ظهور تلميحات الكيبورد والتلميحات المفاجئة عند حرك الماوس */
-    [data-testid="stSidebar"] *, [data-testid="stWidgetLabel"], div[role="radiogroup"] label {{
-        pointer-events: auto !important;
-    }}
-    /* إخفاء تولتيب الاختصارات الخاصة بـ Streamlit */
-    div[data-baseweb="tooltip"], .st-emotion-cache-12w0q3e, [title*="Keyboard"], [title*="shortcut"] {{
+    /* إلغاء حوادث التولتيب تماماً وحظر أي تلميحات تفاعلية للـ Hover */
+    [data-baseweb="tooltip"], div[role="tooltip"], .stTooltipIcon, [data-testid="stSidebar"] [title] {{
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
+        pointer-events: none !important;
+    }}
+
+    /* إخفاء نصوص إرشادات الكيبورد الدبل عند الحركة فوق الخيارات */
+    div[data-testid="stRadio"] label span small, 
+    div[data-testid="stRadio"] label ::after {{
+        display: none !important;
     }}
 
     /* 1. إجبار خلفية التطبيق الأساسية */
@@ -107,7 +110,7 @@ st.markdown(f"""
     h2 {{ color: {active_theme['primary']} !important; font-size: 1.6rem !important; border-bottom: 2px solid {active_theme['border']}; padding-bottom: 8px; margin-top: 15px; }}
     h3 {{ font-size: 1.25rem !important; color: {active_theme['text']} !important; }}
 
-    /* 4. كروت المؤشرات المخصصة (Custom Executive KPI Cards) */
+    /* 4. كروت المؤشرات المخصصة */
     .kpi-card {{
         background: {active_theme['card_bg']};
         border: 1px solid {active_theme['border']};
@@ -169,7 +172,6 @@ st.markdown(f"""
         border-radius: 10px !important;
     }}
     
-    /* إزالة الخلفيات البيضاء عن الإطار الخاص بـ Plotly */
     .js-plotly-plot .plotly, .plot-container {{
         background-color: transparent !important;
     }}
@@ -188,7 +190,6 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # جدول المستخدمين
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -214,7 +215,6 @@ def init_db():
             VALUES (1, 'admin', 'mh123456', 'مدير النظام - MH GROUP', 'admin@mhgroup.com', '01000000000', '', 'ادمن')
         ''')
 
-    # جدول الجلسات النشطة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS active_sessions (
             token TEXT PRIMARY KEY,
@@ -224,7 +224,6 @@ def init_db():
         )
     ''')
 
-    # جدول HR
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS hr (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -246,7 +245,6 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
-    # جدول المالية
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS finance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -257,7 +255,6 @@ def init_db():
         )
     ''')
 
-    # جدول السلف
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS advances (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -273,7 +270,6 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # جدول العقارات
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -287,7 +283,6 @@ def init_db():
         )
     ''')
 
-    # جدول الـ IT
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS it_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -297,7 +292,6 @@ def init_db():
         )
     ''')
 
-    # جدول المستثمرين
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS investors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -420,6 +414,11 @@ cursor.execute("SELECT full_name, avatar_path, role, username FROM users WHERE i
 current_user = cursor.fetchone()
 conn.close()
 
+# تأكيد تحديث متغيرات الجلسة من القاعدة مباشرة
+if current_user:
+    st.session_state['user_role'] = current_user[2]
+    st.session_state['username'] = current_user[3]
+
 st.sidebar.title("MH GROUP ERP")
 if current_user:
     if current_user[1] and os.path.exists(current_user[1]):
@@ -429,12 +428,12 @@ if current_user:
 
 st.sidebar.markdown("---")
 
-user_role = st.session_state['user_role']
+user_role = st.session_state.get('user_role', '')
 username = st.session_state.get('username', '')
 
 allowed_menu = ["الملف الشخصي"]
 
-if user_role == "ادمن":
+if user_role == "ادمن" or username == "admin":
     allowed_menu = [
         "الرئيسية (Dashboard)",
         "الملف الشخصي",
@@ -457,10 +456,9 @@ elif user_role == "عقارات":
     allowed_menu.insert(0, "المخزون العقاري")
     allowed_menu.append("أسهم المستثمرين")
 
-# إظهار قسم الثيمات حواصاً للمطورين فقط (إذا كان اسم المستخدم admin أو الصلاحية مطور)
-is_developer = (username == 'admin' or user_role == 'مطور')
-if is_developer:
-    allowed_menu.append("إعدادات الثيمات (للمطورين)")
+# ضمان إظهار خيار الثيمات للمطور/الآدمن بشكل صريح ومباشر
+if user_role in ["ادمن", "مطور"] or username == "admin":
+    allowed_menu.append("🎨 إعدادات الثيمات (خاص بالمطور)")
 
 menu = st.sidebar.radio("الأقسام المتاحة:", allowed_menu, key="main_sidebar_menu_radio")
 
@@ -482,20 +480,20 @@ if st.sidebar.button("تسجيل الخروج", key="logout_btn", use_container_
     st.rerun()
 
 # ---------------------------------------------------------
-# 5. قسم تخصيص الثيمات (للمطورين فقط)
+# 5. قسم تخصيص الثيمات (خاص بالمطورين)
 # ---------------------------------------------------------
-if menu == "إعدادات الثيمات (للمطورين)":
+if menu == "🎨 إعدادات الثيمات (خاص بالمطور)":
     st.header("🛠️ مركز تخصيص الثيمات والمظهر (خاص بالمطور)")
-    st.info("هذا القسم يظهر فقط لحساب المطور الرئيسي للتعديل على الهوية البصرية للبرنامج.")
+    st.info("قم باختيار الثيم المناسب، وسوف تتحدث ألوان النظام فوراً على كل الأجزاء والكروت والجداول.")
     
-    st.subheader("اختر ثيم النظام:")
+    st.subheader("اختر ثيم الواجهة:")
     selected_theme = st.selectbox(
         "الثيمات المتاحة:",
         options=list(THEMES.keys()),
         index=list(THEMES.keys()).index(st.session_state['current_theme'])
     )
     
-    if st.button("تطبيق الثيم الجديد"):
+    if st.button("تطبيق الثيم فوراً"):
         st.session_state['current_theme'] = selected_theme
         st.success(f"تم تطبيق ثيم '{selected_theme}' بنجاح!")
         st.rerun()
@@ -518,7 +516,6 @@ elif menu == "الرئيسية (Dashboard)":
     total_props = len(df_prop)
     total_employees = len(df_hr)
     
-    # كروت المؤشرات المخصصة
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown(f"""
