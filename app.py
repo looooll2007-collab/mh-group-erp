@@ -1,4 +1,4 @@
-code_content = """import streamlit as st
+import streamlit as st
 import pandas as pd
 import sqlite3
 import datetime
@@ -60,9 +60,9 @@ THEMES = {
 theme = THEMES[st.session_state["selected_theme"]]
 
 # --- Custom Styling & Hide Extra Tooltips / Keyboard Badges ---
-st.markdown(f\"\"\"
+st.markdown(f"""
 <style>
-    /* Hide keyboard shortcuts tooltips and extra hover badges */
+    /* Hide keyboard shortcuts tooltips and unwanted hover text */
     [title*="keyboard"], [title*="Keyboard"], [data-testid="stHeader"] button title {{
         display: none !important;
     }}
@@ -96,7 +96,7 @@ st.markdown(f\"\"\"
         border-right: 1px solid {theme["accent"]};
     }}
 </style>
-\"\"\", unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- Database Initialization ---
 def init_db():
@@ -220,6 +220,7 @@ else:
         st.session_state["logged_in"] = False
         st.rerun()
 
+    # --- Dashboard Page ---
     if page == "لوحة التحكم الرئيسية":
         st.title("📊 لوحة التحكم والملخص العام")
         
@@ -241,6 +242,7 @@ else:
         })
         st.line_chart(df_dummy.set_index("الشهر"))
 
+    # --- Properties Management ---
     elif page == "إدارة العقارات والوحدات":
         st.title("🏡 إدارة العقارات والوحدات")
         
@@ -267,6 +269,7 @@ else:
         conn.close()
         st.dataframe(props_df, use_container_width=True)
 
+    # --- HR Management ---
     elif page == "إدارة الموارد البشرية (HR)":
         st.title("👥 إدارة الموارد البشرية والعمالة")
         
@@ -293,6 +296,7 @@ else:
         conn.close()
         st.dataframe(emp_df, use_container_width=True)
 
+    # --- Investors & Finance ---
     elif page == "قسم المستثمرين والمالية":
         st.title("💼 قسم المستثمرين والمؤشرات المالية")
         
@@ -319,6 +323,7 @@ else:
         conn.close()
         st.dataframe(inv_df, use_container_width=True)
 
+    # --- IT Support ---
     elif page == "قسم تقنية المعلومات (IT Support)":
         st.title("💻 قسم تقنية المعلومات والدعم الفني")
         
@@ -345,6 +350,7 @@ else:
         conn.close()
         st.dataframe(it_df, use_container_width=True)
 
+    # --- Reports ---
     elif page == "التقارير والمستندات":
         st.title("📑 التقارير والطباعة")
         st.info("يمكنك تصدير وعرض التقرير الشامل لبيانات الشركة مباشرة بصيغة CSV أو عرض البيانات المباشرة.")
@@ -372,6 +378,7 @@ else:
             mime="text/csv"
         )
 
+    # --- Developer Only Page ---
     elif page == "⚙️ إعدادات المطور والثيمات":
         st.title("⚙️ قسم المطور والتحكم بالثيمات")
         st.warning("🔒 هذا القسم ظاهر لك بصفتك المطور فقط.")
@@ -397,8 +404,3 @@ else:
             "قاعدة البيانات": "SQLite3 (mh_group_erp.db)",
             "إصدار Streamlit": st.__version__
         })
-"""
-
-# Let's test compiling it
-compile(code_content, '<string>', 'exec')
-print("Code syntax is valid!")
