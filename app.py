@@ -580,4 +580,47 @@ if menu == "الرئيسية (Dashboard)":
                 df_prop, 
                 names='status', 
                 hole=0.5, 
-                color_discrete_sequence=['#2
+                color_discrete_sequence=['#2ecc71', '#f39c12']
+            )
+            fig2.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                font=dict(color=current_theme_cfg["text"]),
+                legend=dict(orientation="h", y=-0.1)
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("لا توجد عقارات مسجلة بالمخزون بعد.")
+
+# ---------------------------------------------------------
+# 6. قسم الموارد البشرية (HR)
+# ---------------------------------------------------------
+elif menu == "الموارد البشرية (HR)":
+    st.header("قسم الموارد البشرية والعمالة")
+    
+    tab1, tab2, tab3 = st.tabs(["إضافة جديد", "عرض وحذف السجلات", "تعديل بيانات"])
+    
+    with tab1:
+        with st.form("hr_form"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                emp_code = st.text_input("الكود الوظيفي (مثال: EMP-101)")
+                name = st.text_input("الاسم الكامل")
+                entry_type = st.selectbox("نوع القيد", ["موظف", "مورد", "عامل عادية"])
+                worker_category = st.selectbox("نوع العامل / التخصص", ["نحات", "مبيض", "عامل", "سباك", "كهربائي", "إداري", "أخرى"])
+            with col_b:
+                grade = st.text_input("الدرجة الوظيفية / الوصف")
+                daily_rate = st.number_input("اليومية (ج.م)", min_value=0.0, step=50.0)
+                hourly_rate = st.number_input("سعر الساعة (ج.م)", min_value=0.0, step=5.0)
+                work_hours = st.number_input("ساعات العمل المسجلة", min_value=0.0, step=0.5)
+                workers_count = st.number_input("عدد العمال التابعين (للموردين)", min_value=0, step=1)
+                
+            submit = st.form_submit_button("حفظ البيانات")
+            if submit:
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""
+                            INSERT INTO hr (emp_code, name, type, worker_category, grade, work_hours, hourly_rate, daily_rate, workers_count)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
