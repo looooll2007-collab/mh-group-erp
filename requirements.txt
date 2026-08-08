@@ -5,3 +5,4 @@ fpdf2
 matplotlib
 plotly
 extra-streamlit-components
+reportlab
