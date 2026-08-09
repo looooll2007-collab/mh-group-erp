@@ -102,7 +102,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Database Initialization ---
+# --- Database Initialization & Auto Migration ---
 def init_db():
     conn = sqlite3.connect("mh_group_erp.db")
     cursor = conn.cursor()
@@ -126,6 +126,7 @@ def init_db():
         )
     ''')
     
+    # Re-create/Ensure employees schema
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,6 +135,17 @@ def init_db():
         )
     ''')
     
+    # Migration check for old employees table structure
+    cursor.execute("PRAGMA table_info(employees)")
+    columns = [col[1] for col in cursor.fetchall()]
+    new_cols = {
+        "emp_type": "TEXT", "pay_type": "TEXT", "hourly_rate": "REAL",
+        "hours_worked": "REAL", "daily_rate": "REAL", "total_pay": "REAL"
+    }
+    for col_name, col_type in new_cols.items():
+        if col_name not in columns:
+            cursor.execute(f"ALTER TABLE employees ADD COLUMN {col_name} {col_type}")
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS investors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,6 +171,13 @@ def init_db():
     conn.close()
 
 init_db()
+
+# --- Safe Database Query Helper ---
+def safe_read_sql(query, conn):
+    try:
+        return pd.read_sql_query(query, conn)
+    except Exception:
+        return pd.DataFrame()
 
 # --- Session Authentication State ---
 if "logged_in" not in st.session_state:
@@ -228,10 +247,17 @@ else:
         st.markdown("<h1 class='main-header'>📊 لوحة التحكم المتقدمة والملخص العام</h1>", unsafe_allow_html=True)
         
         conn = sqlite3.connect("mh_group_erp.db")
-        prop_count = pd.read_sql_query("SELECT COUNT(*) as count FROM properties", conn)['count'][0]
-        emp_count = pd.read_sql_query("SELECT COUNT(*) as count FROM employees", conn)['count'][0]
-        total_inv = pd.read_sql_query("SELECT SUM(investment_amount) as sum FROM investors", conn)['sum'][0] or 0
-        open_tickets = pd.read_sql_query("SELECT COUNT(*) as count FROM it_tickets WHERE status != 'مغلق'", conn)['count'][0]
+        prop_df = safe_read_sql("SELECT COUNT(*) as count FROM properties", conn)
+        prop_count = prop_df['count'][0] if not prop_df.empty else 0
+        
+        emp_df = safe_read_sql("SELECT COUNT(*) as count FROM employees", conn)
+        emp_count = emp_df['count'][0] if not emp_df.empty else 0
+        
+        inv_df = safe_read_sql("SELECT SUM(investment_amount) as sum FROM investors", conn)
+        total_inv = inv_df['sum'][0] if (not inv_df.empty and inv_df['sum'][0] is not None) else 0
+        
+        t_df = safe_read_sql("SELECT COUNT(*) as count FROM it_tickets WHERE status != 'مغلق'", conn)
+        open_tickets = t_df['count'][0] if not t_df.empty else 0
         conn.close()
 
         c1, c2, c3, c4 = st.columns(4)
@@ -247,14 +273,14 @@ else:
         with col_a:
             st.markdown("### 👷 ملخص العمالة والموظفين")
             conn = sqlite3.connect("mh_group_erp.db")
-            emp_summary = pd.read_sql_query("SELECT emp_type, COUNT(*) as العدد FROM employees GROUP BY emp_type", conn)
+            emp_summary = safe_read_sql("SELECT emp_type as الفئة, COUNT(*) as العدد FROM employees GROUP BY emp_type", conn)
             conn.close()
             st.dataframe(emp_summary, use_container_width=True)
 
         with col_b:
             st.markdown("### 🏡 ملخص حالة العقارات")
             conn = sqlite3.connect("mh_group_erp.db")
-            prop_summary = pd.read_sql_query("SELECT status as الحالة, COUNT(*) as العدد FROM properties GROUP BY status", conn)
+            prop_summary = safe_read_sql("SELECT status as الحالة, COUNT(*) as العدد FROM properties GROUP BY status", conn)
             conn.close()
             st.dataframe(prop_summary, use_container_width=True)
 
@@ -282,12 +308,12 @@ else:
 
         with tab2:
             conn = sqlite3.connect("mh_group_erp.db")
-            st.dataframe(pd.read_sql_query("SELECT id, username, role FROM users", conn), use_container_width=True)
+            st.dataframe(safe_read_sql("SELECT id, username, role FROM users", conn), use_container_width=True)
             conn.close()
 
         with tab3:
             conn = sqlite3.connect("mh_group_erp.db")
-            users_df = pd.read_sql_query("SELECT id, username FROM users WHERE username != 'admin'", conn)
+            users_df = safe_read_sql("SELECT id, username FROM users WHERE username != 'admin'", conn)
             conn.close()
             if not users_df.empty:
                 del_user = st.selectbox("اختر المستخدم للحذف:", users_df["username"])
@@ -319,7 +345,7 @@ else:
 
         with tab2:
             conn = sqlite3.connect("mh_group_erp.db")
-            props_df = pd.read_sql_query("SELECT id, name FROM properties", conn)
+            props_df = safe_read_sql("SELECT id, name FROM properties", conn)
             conn.close()
             if not props_df.empty:
                 del_id = st.selectbox("اختر العقار للحذف", props_df["id"], format_func=lambda x: props_df[props_df['id']==x]['name'].values[0])
@@ -332,7 +358,7 @@ else:
                     st.rerun()
 
         conn = sqlite3.connect("mh_group_erp.db")
-        st.dataframe(pd.read_sql_query("SELECT * FROM properties", conn), use_container_width=True)
+        st.dataframe(safe_read_sql("SELECT * FROM properties", conn), use_container_width=True)
         conn.close()
 
     # --- 4. HR Section ---
@@ -365,7 +391,7 @@ else:
 
         with tab2:
             conn = sqlite3.connect("mh_group_erp.db")
-            emp_df = pd.read_sql_query("SELECT id, name FROM employees", conn)
+            emp_df = safe_read_sql("SELECT id, name FROM employees", conn)
             conn.close()
             if not emp_df.empty:
                 del_emp_id = st.selectbox("اختر الفرد للحذف", emp_df["id"], format_func=lambda x: emp_df[emp_df['id']==x]['name'].values[0])
@@ -378,7 +404,7 @@ else:
                     st.rerun()
 
         conn = sqlite3.connect("mh_group_erp.db")
-        st.dataframe(pd.read_sql_query("SELECT * FROM employees", conn), use_container_width=True)
+        st.dataframe(safe_read_sql("SELECT * FROM employees", conn), use_container_width=True)
         conn.close()
 
     # --- 5. Investors ---
@@ -401,7 +427,7 @@ else:
 
         with tab2:
             conn = sqlite3.connect("mh_group_erp.db")
-            inv_df = pd.read_sql_query("SELECT id, name FROM investors", conn)
+            inv_df = safe_read_sql("SELECT id, name FROM investors", conn)
             conn.close()
             if not inv_df.empty:
                 del_inv_id = st.selectbox("اختر المستثمر للحذف", inv_df["id"], format_func=lambda x: inv_df[inv_df['id']==x]['name'].values[0])
@@ -415,7 +441,7 @@ else:
 
         st.subheader("📈 الرسوم التوضيحية للاستثمارات")
         conn = sqlite3.connect("mh_group_erp.db")
-        df_inv = pd.read_sql_query("SELECT name, investment_amount, return_rate FROM investors", conn)
+        df_inv = safe_read_sql("SELECT name, investment_amount, return_rate FROM investors", conn)
         conn.close()
         
         if not df_inv.empty:
@@ -448,7 +474,7 @@ else:
 
         with tab2:
             conn = sqlite3.connect("mh_group_erp.db")
-            t_df = pd.read_sql_query("SELECT id, title FROM it_tickets", conn)
+            t_df = safe_read_sql("SELECT id, title FROM it_tickets", conn)
             conn.close()
             if not t_df.empty:
                 del_t_id = st.selectbox("اختر التذكرة للحذف", t_df["id"], format_func=lambda x: t_df[t_df['id']==x]['title'].values[0])
@@ -461,7 +487,7 @@ else:
                     st.rerun()
 
         conn = sqlite3.connect("mh_group_erp.db")
-        st.dataframe(pd.read_sql_query("SELECT * FROM it_tickets", conn), use_container_width=True)
+        st.dataframe(safe_read_sql("SELECT * FROM it_tickets", conn), use_container_width=True)
         conn.close()
 
     # --- 7. Reports & Documents ---
@@ -486,7 +512,7 @@ else:
             st.markdown("---")
             st.subheader("📂 الأرشيف الحالي للمستندات")
             conn = sqlite3.connect("mh_group_erp.db")
-            docs_df = pd.read_sql_query("SELECT * FROM documents", conn)
+            docs_df = safe_read_sql("SELECT * FROM documents", conn)
             conn.close()
             st.dataframe(docs_df, use_container_width=True)
 
@@ -496,13 +522,13 @@ else:
             conn = sqlite3.connect("mh_group_erp.db")
             
             if rep_type == "عقارات":
-                df = pd.read_sql_query("SELECT * FROM properties", conn)
+                df = safe_read_sql("SELECT * FROM properties", conn)
             elif rep_type == "موظفين وعمالة":
-                df = pd.read_sql_query("SELECT * FROM employees", conn)
+                df = safe_read_sql("SELECT * FROM employees", conn)
             elif rep_type == "مستثمرين":
-                df = pd.read_sql_query("SELECT * FROM investors", conn)
+                df = safe_read_sql("SELECT * FROM investors", conn)
             else:
-                df = pd.read_sql_query("SELECT * FROM it_tickets", conn)
+                df = safe_read_sql("SELECT * FROM it_tickets", conn)
             conn.close()
             
             st.dataframe(df, use_container_width=True)
