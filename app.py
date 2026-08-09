@@ -1,309 +1,480 @@
-import os
+import base64
+import datetime
+import io
+import random
 import sqlite3
-from flask import Flask, render_template_string, request, redirect, url_for, flash, g, abort
-
-app = Flask(__name__)
-app.secret_key = 'mh_group_secret_key_2026'
-DATABASE = 'mh_group_erp.db'
+import pandas as pd
+import requests
+import streamlit as st
 
 # ==========================================
-# 1. تهيئة قاعدة البيانات والتحديث التلقائي
+# 1. قائمة الثيمات وإعدادات الألوان (Themes)
 # ==========================================
+THEMES = {
+    "الداكن الملكي والذهبي (Royal Dark & Gold)": {
+        "primary": "#D97706",
+        "bg": "#0F172A",
+        "card": "#1E293B",
+        "text": "#F8FAFC",
+        "accent": "#F59E0B",
+        "border": "#334155",
+    },
+    "أزرق نيلي احترافي (Modern Indigo)": {
+        "primary": "#4F46E5",
+        "bg": "#F8FAFC",
+        "card": "#FFFFFF",
+        "text": "#1E293B",
+        "accent": "#6366F1",
+        "border": "#E2E8F0",
+    },
+    "أخضر زمردي فخم (Emerald Slate)": {
+        "primary": "#059669",
+        "bg": "#F4FBF7",
+        "card": "#FFFFFF",
+        "text": "#064E3B",
+        "accent": "#10B981",
+        "border": "#D1FAE5",
+    },
+    "عنابي فاخر (Burgundy Premium)": {
+        "primary": "#881337",
+        "bg": "#FFF1F2",
+        "card": "#FFFFFF",
+        "text": "#4C0519",
+        "accent": "#E11D48",
+        "border": "#FFE4E6",
+    },
+    "الليل والسيبربانك (Cyberpunk Neon)": {
+        "primary": "#06B6D4",
+        "bg": "#0B0F19",
+        "card": "#111827",
+        "text": "#F3F4F6",
+        "accent": "#A855F7",
+        "border": "#1F2937",
+    },
+}
 
-def get_db():
-    if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE)
-        g.db.row_factory = sqlite3.Row
-    return g.db
+# --- تهيئة الصفحة ---
+st.set_page_config(
+    page_title="MH Group ERP System",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-@app.teardown_appcontext
-def close_db(error):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
+# --- إعدادات الجلسات (Session States) ---
+if "login_config" not in st.session_state:
+    st.session_state["login_config"] = {
+        "title": "🏢 نظام إدارة MH Group ERP",
+        "subtitle": "🔐 تسجيل الدخول للنظام",
+        "btn_text": "تسجيل الدخول",
+        "welcome_msg": "مرحباً بك! يرجى إدخال بياناتك للمتابعة.",
+        "logo_bytes": None,
+    }
 
-def init_and_migrate_db():
-    with app.app_context():
-        db = get_db()
-        cursor = db.cursor()
+if "dashboard_config" not in st.session_state:
+    st.session_state["dashboard_config"] = {
+        "header_title": "📊 لوحة التحكم المتقدمة والملخص العام",
+        "show_metrics": True,
+        "custom_note": "أهلاً بك في لوحة تحكم النظام العامة. يمكنك متابعة العمليات من هنا.",
+    }
 
-        # جدول العقارات
-        cursor.execute('''
+if "selected_theme" not in st.session_state:
+    st.session_state["selected_theme"] = "الداكن الملكي والذهبي (Royal Dark & Gold)"
+
+current_theme = THEMES[st.session_state["selected_theme"]]
+
+# --- تطبيق CSS للمظهر العام ---
+st.markdown(
+    f"""
+<style>
+    .stApp {{
+        background-color: {current_theme["bg"]} !important;
+        color: {current_theme["text"]} !important;
+    }}
+    .main-header {{
+        font-size: 2rem;
+        font-weight: 800;
+        color: {current_theme["primary"]} !important;
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 12px;
+        border-bottom: 3px solid {current_theme["accent"]};
+        background-color: {current_theme["card"]};
+        border-radius: 10px;
+    }}
+    div[data-testid="stMetric"] {{
+        background-color: {current_theme["card"]} !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
+        border: 1px solid {current_theme["border"]} !important;
+    }}
+    section[data-testid="stSidebar"] {{
+        background-color: {current_theme["card"]} !important;
+        border-right: 1px solid {current_theme["border"]} !important;
+    }}
+    .stButton>button {{
+        background-color: {current_theme["primary"]} !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: bold !important;
+    }}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# ==========================================
+# 2. تهيئة قاعدة البيانات والتحديث التلقائي
+# ==========================================
+def init_db():
+    with sqlite3.connect("mh_group_erp.db") as conn:
+        cursor = conn.cursor()
+
+        # جدول المستخدمين
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password TEXT,
+                role TEXT,
+                phone TEXT
+            )
+        """)
+
+        cursor.execute("PRAGMA table_info(users)")
+        u_cols = [c[1] for c in cursor.fetchall()]
+        if "phone" not in u_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+
+        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT INTO users (username, password, role, phone) VALUES ('admin', 'admin123', 'Admin', '01000000000')"
+            )
+
+        # جدول العقارات (معالجة الأخطاء السابقة)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS properties (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT,
-                type TEXT,
-                finishing TEXT,
-                location TEXT,
-                price REAL,
-                status TEXT DEFAULT 'متاح',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                name TEXT, 
+                location TEXT, 
+                price REAL, 
+                status TEXT,
+                type TEXT, 
+                finishing TEXT
             )
-        ''')
+        """)
 
-        # التحقق من الأعمدة وإضافتها إن كانت مفقودة
+        # فحص وتحديث أعمدة جدول العقارات تلقائياً
         cursor.execute("PRAGMA table_info(properties)")
-        columns = [column[1] for column in cursor.fetchall()]
-        required_columns = {
-            'name': 'TEXT',
-            'type': 'TEXT',
-            'finishing': 'TEXT',
-            'location': 'TEXT',
-            'price': 'REAL',
-            'status': "TEXT DEFAULT 'متاح'"
+        p_cols = [c[1] for c in cursor.fetchall()]
+        required_p_cols = {
+            "name": "TEXT",
+            "location": "TEXT",
+            "price": "REAL",
+            "status": "TEXT",
+            "type": "TEXT",
+            "finishing": "TEXT",
         }
-        for col_name, col_type in required_columns.items():
-            if col_name not in columns:
-                cursor.execute(f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}")
+        for col_name, col_type in required_p_cols.items():
+            if col_name not in p_cols:
+                cursor.execute(
+                    f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"
+                )
 
-        # جدول المعاملات والقبض
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
+        # جدول مصاريف العقارات
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS property_expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_name TEXT NOT NULL,
-                amount REAL NOT NULL,
-                description TEXT,
-                payment_method TEXT DEFAULT 'نقداً',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                property_id INTEGER, expense_type TEXT, amount REAL, notes TEXT, date TEXT,
+                FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE
             )
-        ''')
+        """)
 
-        # جدول العقود
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS contracts (
+        # جدول الموظفين والعمالة
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                party_name TEXT NOT NULL,
-                contract_type TEXT NOT NULL,
-                total_amount REAL,
-                details TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                name TEXT, emp_type TEXT, position TEXT, pay_type TEXT,
+                hourly_rate REAL, hours_worked REAL, daily_rate REAL, total_pay REAL, hire_date TEXT,
+                workers_count INTEGER DEFAULT 1, craft_type TEXT
             )
-        ''')
+        """)
 
-        db.commit()
+        # جدول المستثمرين
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS investors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT, investment_amount REAL, return_rate REAL, start_date TEXT
+            )
+        """)
 
-init_and_migrate_db()
+        # جدول تذاكر IT
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS it_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT, category TEXT, status TEXT, created_at TEXT
+            )
+        """)
+
+        # جدول سندات القبض والمعاملات الماليّة
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS receipts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_name TEXT, amount REAL, description TEXT, payment_method TEXT, date TEXT
+            )
+        """)
+
+        conn.commit()
+
+
+init_db()
+
+
+def safe_read_sql(query, params=()):
+    try:
+        with sqlite3.connect("mh_group_erp.db") as conn:
+            return pd.read_sql_query(query, conn, params=params)
+    except Exception:
+        return pd.DataFrame()
 
 
 # ==========================================
-# 2. قوالب الـ HTML (Embedded Templates)
+# 3. منشئ طباعة السندات والعقود (HTML to Print)
 # ==========================================
-
-INDEX_HTML = '''
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>MH GROUP - نظام إدارة العقارات والسندات</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
-</head>
-<body class="bg-light p-4">
-<div class="container">
-    <h1 class="mb-4 text-primary font-weight-bold">MH GROUP ERP</h1>
-
-    <!-- التنبيهات -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
-    <div class="row">
-        <!-- إضافة عقار -->
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-dark text-white">إضافة عقار جديد</div>
-                <div class="card-body">
-                    <form action="/add_property" method="POST">
-                        <div class="mb-2"><input type="text" name="name" class="form-control" placeholder="اسم العقار / البرج" required></div>
-                        <div class="mb-2"><input type="text" name="type" class="form-control" placeholder="النوع (شقة / محل / فيلا)"></div>
-                        <div class="mb-2"><input type="text" name="finishing" class="form-control" placeholder="مستوى التشطيب"></div>
-                        <div class="mb-2"><input type="text" name="location" class="form-control" placeholder="الموقع / العنوان"></div>
-                        <div class="mb-2"><input type="number" name="price" class="form-control" placeholder="السعر" step="0.01"></div>
-                        <button type="submit" class="btn btn-success w-100">حفظ العقار</button>
-                    </form>
+def generate_receipt_html(receipt_id, client_name, amount, description, method, date_str):
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, sans-serif; background: #fff; padding: 20px; color: #333; }}
+            .receipt-box {{ max-width: 650px; margin: auto; border: 2px solid #1a365d; padding: 25px; border-radius: 8px; }}
+            .header {{ display: flex; justify-content: space-between; border-bottom: 2px solid #1a365d; padding-bottom: 10px; }}
+            .title {{ color: #1a365d; margin: 0; font-size: 24px; }}
+            .amount {{ background: #f1f5f9; text-align: center; font-size: 22px; font-weight: bold; color: #d97706; padding: 10px; margin: 20px 0; border-radius: 6px; }}
+            .field {{ margin-bottom: 12px; font-size: 16px; }}
+            .signatures {{ display: flex; justify-content: space-between; margin-top: 40px; padding-top: 15px; border-top: 1px dashed #ccc; }}
+        </style>
+    </head>
+    <body onload="window.print()">
+        <div class="receipt-box">
+            <div class="header">
+                <div>
+                    <h2 class="title">MH GROUP</h2>
+                    <small>لإدارة العقارات والخدمات الماليّة</small>
+                </div>
+                <div style="text-align: left;">
+                    <div>رقم السند: #{receipt_id}</div>
+                    <small>التاريخ: {date_str}</small>
                 </div>
             </div>
-        </div>
-
-        <!-- إضافة سند / معاملة مالية -->
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">تسجيل سند قبض جديد</div>
-                <div class="card-body">
-                    <form action="/add_transaction" method="POST">
-                        <div class="mb-2"><input type="text" name="client_name" class="form-control" placeholder="اسم العميل / المستثمر" required></div>
-                        <div class="mb-2"><input type="number" name="amount" class="form-control" placeholder="المبلغ (ج.م)" required step="0.01"></div>
-                        <div class="mb-2"><input type="text" name="description" class="form-control" placeholder="البيان / السبب"></div>
-                        <div class="mb-2">
-                            <select name="payment_method" class="form-select">
-                                <option value="نقداً">نقداً</option>
-                                <option value="تحويل بنكي">تحويل بنكي</option>
-                                <option value="شيك">شيك</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">تسجيل السند</button>
-                    </form>
-                </div>
+            <h3 style="text-align:center; margin-top:20px;">سند قبض نقدية</h3>
+            <div class="field"><strong>استلمنا من السيد/السادة:</strong> {client_name}</div>
+            <div class="amount">المبلغ: {amount:,.2f} جنيه مصري</div>
+            <div class="field"><strong>وذلك عن:</strong> {description or 'سداد دفعة حساب'}</div>
+            <div class="field"><strong>طريقة الدفع:</strong> {method}</div>
+            <div class="signatures">
+                <div>المستلم: ..................</div>
+                <div>الختم والتوقيع: ..................</div>
             </div>
         </div>
-    </div>
+    </body>
+    </html>
+    """
 
-    <!-- جدول السندات المتاحة للطباعة -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-secondary text-white">سندات القبض (جاهزة للطباعة / PDF)</div>
-        <div class="card-body">
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>اسم العميل</th>
-                        <th>المبلغ</th>
-                        <th>البيان</th>
-                        <th>طريقة الدفع</th>
-                        <th>الخيارات</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in transactions %}
-                    <tr>
-                        <td>{{ item.id }}</td>
-                        <td>{{ item.client_name }}</td>
-                        <td>{{ item.amount }} ج.م</td>
-                        <td>{{ item.description }}</td>
-                        <td>{{ item.payment_method }}</td>
-                        <td>
-                            <a href="/print/receipt/{{ item.id }}" target="_blank" class="btn btn-sm btn-outline-primary">🖨️ طباعة السند / PDF</a>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="6" class="text-center">لا توجد سندات مسجلة حتى الآن</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-</div>
-</body>
-</html>
-'''
-
-RECEIPT_HTML = '''
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>سند قبض #{{ receipt.id }} - MH Group</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f8f9fa; padding: 30px; }
-        .receipt-card { max-width: 650px; margin: auto; background: #fff; padding: 30px; border: 2px solid #1a365d; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; }
-        .amount-box { background: #e2e8f0; font-size: 22px; font-weight: bold; text-align: center; padding: 12px; margin: 25px 0; color: #2b6cb0; border-radius: 6px; border: 1px solid #cbd5e0; }
-        .row-item { margin-bottom: 15px; font-size: 16px; line-height: 1.6; }
-        .signatures { display: flex; justify-content: space-between; margin-top: 50px; padding-top: 20px; border-top: 1px dashed #ccc; }
-        .no-print { text-align: center; margin-bottom: 20px; }
-        .btn-print { background: #2b6cb0; color: white; border: none; padding: 10px 25px; font-size: 16px; border-radius: 5px; cursor: pointer; }
-        @media print { .no-print { display: none; } body { background: none; padding: 0; } .receipt-card { border: 1px solid #000; box-shadow: none; } }
-    </style>
-</head>
-<body onload="window.print()">
-
-    <div class="no-print">
-        <button class="btn-print" onclick="window.print()">🖨️ طباعة السند / حفظ كـ PDF</button>
-    </div>
-
-    <div class="receipt-card">
-        <div class="header">
-            <div>
-                <h2 style="margin:0; color:#1a365d;">MH GROUP</h2>
-                <small>إدارة العقارات والخدمات الماليّة</small>
-            </div>
-            <div style="text-align: left;">
-                <div style="font-weight: bold;">رقم السند: #{{ receipt.id }}</div>
-                <small>التاريخ: {{ receipt.created_at }}</small>
-            </div>
-        </div>
-
-        <h3 style="text-align: center; margin-top: 20px; color: #2d3748;">إيصال استلام نقدية (سند قبض)</h3>
-
-        <div class="row-item"><strong>استلمنا من السيد / السادة:</strong> {{ receipt.client_name }}</div>
-        
-        <div class="amount-box">المبلغ المدفوع: {{ receipt.amount }} جنيه مصري</div>
-        
-        <div class="row-item"><strong>وذلك عن:</strong> {{ receipt.description or 'سداد دفعة حساب' }}</div>
-        <div class="row-item"><strong>طريقة الدفع:</strong> {{ receipt.payment_method }}</div>
-
-        <div class="signatures">
-            <div><strong>اسم المستلم:</strong> ....................</div>
-            <div><strong>التوقيع والختم:</strong> ....................</div>
-        </div>
-    </div>
-
-</body>
-</html>
-'''
 
 # ==========================================
-# 3. مسارات التطبيق (Routes)
+# 4. إدارة الجلسة والدخول
 # ==========================================
-
-@app.route('/')
-def index():
-    db = get_db()
-    properties = db.execute('SELECT * FROM properties ORDER BY id DESC').fetchall()
-    transactions = db.execute('SELECT * FROM transactions ORDER BY id DESC').fetchall()
-    return render_template_string(INDEX_HTML, properties=properties, transactions=transactions)
-
-@app.route('/add_property', methods=['POST'])
-def add_property():
-    try:
-        db = get_db()
-        db.execute('''
-            INSERT INTO properties (name, type, finishing, location, price)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (
-            request.form.get('name'),
-            request.form.get('type'),
-            request.form.get('finishing'),
-            request.form.get('location'),
-            request.form.get('price')
-        ))
-        db.commit()
-        flash('تم حفظ العقار بنجاح!', 'success')
-    except Exception as e:
-        flash(f'خطأ أثناء الحفظ: {str(e)}', 'danger')
-    return redirect(url_for('index'))
-
-@app.route('/add_transaction', methods=['POST'])
-def add_transaction():
-    try:
-        db = get_db()
-        db.execute('''
-            INSERT INTO transactions (client_name, amount, description, payment_method)
-            VALUES (?, ?, ?, ?)
-        ''', (
-            request.form.get('client_name'),
-            request.form.get('amount'),
-            request.form.get('description'),
-            request.form.get('payment_method')
-        ))
-        db.commit()
-        flash('تم تسجيل السند بنجاح!', 'success')
-    except Exception as e:
-        flash(f'خطأ أثناء تسجيل السند: {str(e)}', 'danger')
-    return redirect(url_for('index'))
-
-@app.route('/print/receipt/<int:transaction_id>')
-def print_receipt(transaction_id):
-    db = get_db()
-    receipt = db.execute('SELECT * FROM transactions WHERE id = ?', (transaction_id,)).fetchone()
-    if not receipt:
-        return "السند غير موجود", 404
-    return render_template_string(RECEIPT_HTML, receipt=receipt)
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "user_role" not in st.session_state:
+    st.session_state["user_role"] = ""
+if "username" not in st.session_state:
+    st.session_state["username"] = ""
+if "is_developer" not in st.session_state:
+    st.session_state["is_developer"] = False
 
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+def login_page():
+    cfg = st.session_state["login_config"]
+    st.markdown(f"<h1 class='main-header'>{cfg['title']}</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.subheader(cfg["subtitle"])
+        username_input = st.text_input("اسم المستخدم")
+        password_input = st.text_input("كلمة المرور", type="password")
+
+        if st.button(cfg["btn_text"], use_container_width=True):
+            with sqlite3.connect("mh_group_erp.db") as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT role FROM users WHERE username = ? AND password = ?",
+                    (username_input, password_input),
+                )
+                res = cursor.fetchone()
+
+            if res:
+                st.session_state["logged_in"] = True
+                st.session_state["user_role"] = res[0]
+                st.session_state["username"] = username_input
+                st.success("تم تسجيل الدخول بنجاح!")
+                st.rerun()
+            else:
+                st.error("بيانات الدخول غير صحيحة!")
+
+
+# ==========================================
+# 5. الصفحة الرئيسية والأقسام
+# ==========================================
+if not st.session_state["logged_in"]:
+    login_page()
+else:
+    st.sidebar.title("🏢 MH Group ERP")
+    st.sidebar.markdown(f"**المستخدم:** {st.session_state['username']}\n\n**الصلاحية:** {st.session_state['user_role']}")
+
+    is_admin = st.session_state["user_role"] == "Admin"
+
+    pages = [
+        "📊 لوحة التحكم الرئيسية",
+        "🏡 إدارة العقارات والوحدات",
+        "💼 قسم المستثمرين والمالية",
+        "🧾 سندات القبض والطباعة (PDF)",
+        "👷 إدارة الموارد البشرية والعمالة",
+        "👥 إدارة المستخدمين",
+    ]
+
+    if is_admin:
+        pages.append("⚙️ إعدادات المطور والثيمات")
+
+    page = st.sidebar.radio("القائمة الرئيسية", pages)
+
+    if st.sidebar.button("تسجيل الخروج"):
+        st.session_state["logged_in"] = False
+        st.rerun()
+
+    # --- 1. Dashboard ---
+    if page == "📊 لوحة التحكم الرئيسية":
+        st.markdown(f"<h1 class='main-header'>📊 لوحة التحكم الرئيسية</h1>", unsafe_allow_html=True)
+        prop_df = safe_read_sql("SELECT COUNT(*) as count FROM properties")
+        inv_df = safe_read_sql("SELECT SUM(investment_amount) as sum FROM investors")
+        
+        c1, c2 = st.columns(2)
+        c1.metric("إجمالي العقارات المسجلة", f"{prop_df['count'][0] if not prop_df.empty else 0} وحدة")
+        c2.metric("حجم الاستثمارات الكلي", f"{inv_df['sum'][0] if (not inv_df.empty and inv_df['sum'][0]) else 0:,.0f} EGP")
+
+    # --- 2. Properties ---
+    elif page == "🏡 إدارة العقارات والوحدات":
+        st.title("🏡 إدارة العقارات والوحدات")
+        with st.form("add_prop_form"):
+            p_name = st.text_input("اسم العقار / الوحدة")
+            p_type = st.selectbox("نوع العقار", ["شقة", "فيلا", "محل تجاري", "أرض", "مبنى كامل"])
+            p_loc = st.text_input("الموقع")
+            p_price = st.number_input("السعر المقدر", min_value=0.0)
+            p_finishing = st.selectbox("التشطيب", ["بدون تشطيب", "لوكس", "سوبر لوكس"])
+            p_stat = st.selectbox("الحالة", ["متاح", "تم البيع", "محجوز"])
+
+            if st.form_submit_button("حفظ العقار"):
+                if p_name.strip():
+                    with sqlite3.connect("mh_group_erp.db") as conn:
+                        conn.execute(
+                            "INSERT INTO properties (name, location, price, status, type, finishing) VALUES (?, ?, ?, ?, ?, ?)",
+                            (p_name.strip(), p_loc, float(p_price), p_stat, p_type, p_finishing)
+                        )
+                        conn.commit()
+                    st.success("تم حفظ العقار بنجاح!")
+                    st.rerun()
+                else:
+                    st.error("يرجى كتابة اسم العقار!")
+
+        st.subheader("📋 قائمة العقارات")
+        st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
+
+    # --- 3. Investors & P&L ---
+    elif page == "💼 قسم المستثمرين والمالية":
+        st.title("💼 قسم المستثمرين وحاسبة الأرباح")
+        tab1, tab2 = st.tabs(["➕ تسجيل مستثمر", "🧮 حاسبة الأرباح والخسائر"])
+
+        with tab1:
+            with st.form("add_inv"):
+                i_name = st.text_input("اسم المستثمر")
+                i_amount = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
+                i_rate = st.number_input("نسبة العائد المتفق عليها (%)", min_value=0.0)
+                if st.form_submit_button("تسجيل المستثمر"):
+                    with sqlite3.connect("mh_group_erp.db") as conn:
+                        conn.execute("INSERT INTO investors (name, investment_amount, return_rate, start_date) VALUES (?, ?, ?, ?)",
+                                     (i_name, i_amount, i_rate, str(datetime.date.today())))
+                        conn.commit()
+                    st.success("تم تسجل المستثمر بنجاح!")
+                    st.rerun()
+
+        with tab2:
+            amt = st.number_input("رأس المال (EGP):", min_value=0.0, value=100000.0)
+            rate = st.number_input("نسبة العائد التقديرية (%):", min_value=0.0, value=15.0)
+            profit = amt * (rate / 100)
+            st.metric("إجمالي الربح المتوقع", f"{profit:,.2f} EGP")
+            st.metric("المبلغ النهائي مع الأرباح", f"{(amt + profit):,.2f} EGP")
+
+    # --- 4. Receipts & Printing (Auto PDF / Print Generator) ---
+    elif page == "🧾 سندات القبض والطباعة (PDF)":
+        st.title("🧾 إنشاء وطباعة سندات القبض")
+        tab_add, tab_list = st.tabs(["➕ إصدار سند جديد", "📋 السندات الصادرة للطباعة"])
+
+        with tab_add:
+            with st.form("create_receipt"):
+                c_name = st.text_input("اسم العميل / المستثمر:")
+                r_amount = st.number_input("المبلغ (EGP):", min_value=0.0)
+                r_desc = st.text_input("البيان / السبب:")
+                r_method = st.selectbox("طريقة الدفع:", ["نقداً", "تحويل بنكي", "شيك"])
+
+                if st.form_submit_button("إصدار السند"):
+                    if c_name and r_amount > 0:
+                        with sqlite3.connect("mh_group_erp.db") as conn:
+                            conn.execute(
+                                "INSERT INTO receipts (client_name, amount, description, payment_method, date) VALUES (?, ?, ?, ?, ?)",
+                                (c_name, float(r_amount), r_desc, r_method, str(datetime.date.today()))
+                            )
+                            conn.commit()
+                        st.success("تم إصدار السند بنجاح!")
+                        st.rerun()
+
+        with tab_list:
+            receipts_df = safe_read_sql("SELECT * FROM receipts ORDER BY id DESC")
+            if not receipts_df.empty:
+                for idx, row in receipts_df.iterrows():
+                    col_info, col_btn = st.columns([3, 1])
+                    with col_info:
+                        st.write(f"**سند #{row['id']}** | العميل: **{row['client_name']}** | المبلغ: **{row['amount']:,.2f} EGP** | التاريخ: {row['date']}")
+                    with col_btn:
+                        html_code = generate_receipt_html(row['id'], row['client_name'], row['amount'], row['description'], row['payment_method'], row['date'])
+                        st.download_button(
+                            label="🖨️ طباعة السند (HTML/PDF)",
+                            data=html_code,
+                            file_name=f"Receipt_{row['id']}.html",
+                            mime="text/html",
+                            key=f"btn_{row['id']}"
+                        )
+            else:
+                st.info("لا توجد سندات صادر حتى الآن.")
+
+    # --- 5. HR ---
+    elif page == "👷 إدارة الموارد البشرية والعمالة":
+        st.title("👷 إدارة العمالة والموظفين")
+        st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
+
+    # --- 6. Users ---
+    elif page == "👥 إدارة المستخدمين":
+        st.title("👥 قائمة المستخدمين")
+        st.dataframe(safe_read_sql("SELECT id, username, role, phone FROM users"), use_container_width=True)
+
+    # --- 7. Settings & Themes ---
+    elif page == "⚙️ إعدادات المطور والثيمات":
+        st.title("🎨 التحكم بمظهر النظام")
+        selected_theme_name = st.selectbox("اختر الثيم المطبق:", list(THEMES.keys()))
+        if selected_theme_name != st.session_state["selected_theme"]:
+            st.session_state["selected_theme"] = selected_theme_name
+            st.rerun()
