@@ -132,7 +132,7 @@ def init_db():
     with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
         cursor = conn.cursor()
 
-        # جدول المستخدمين
+        # 1. إنشاء جدول المستخدمين إن لم يكن موجوداً
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,7 +143,28 @@ def init_db():
             )
         """)
 
-        # جدول كلمة سر الأقسام الخاصة (Section Passwords)
+        # 2. فحص وإضافة الأعمدة الناقصة لجدول users تلقائياً (Schema Migration)
+        cursor.execute("PRAGMA table_info(users)")
+        u_cols = [c[1] for c in cursor.fetchall()]
+
+        if "role" not in u_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'Admin'")
+        if "phone" not in u_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+
+        # 3. التأكد من وجود حساب المسؤول Admin
+        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT INTO users (username, password, role, phone) VALUES ('admin', 'admin123', 'Admin', '01000000000')"
+            )
+        else:
+            # تحديث صلاحية admin للتأكد من عدم وجود قيم فارغة
+            cursor.execute(
+                "UPDATE users SET role = 'Admin' WHERE username = 'admin' AND (role IS NULL OR role = '')"
+            )
+
+        # 4. جدول كلمة سر الأقسام الخاصة
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS section_passwords (
                 section_name TEXT PRIMARY KEY,
@@ -151,18 +172,7 @@ def init_db():
             )
         """)
 
-        cursor.execute("PRAGMA table_info(users)")
-        u_cols = [c[1] for c in cursor.fetchall()]
-        if "phone" not in u_cols:
-            cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
-
-        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-        if not cursor.fetchone():
-            cursor.execute(
-                "INSERT INTO users (username, password, role, phone) VALUES ('admin', 'admin123', 'Admin', '01000000000')"
-            )
-
-        # جدول العقارات
+        # 5. جدول العقارات
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS properties (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,7 +185,6 @@ def init_db():
             )
         """)
 
-        # هجرة وتحديث أعمدة جدول العقارات تلقائياً
         cursor.execute("PRAGMA table_info(properties)")
         p_cols = [c[1] for c in cursor.fetchall()]
         required_p_cols = {
@@ -192,7 +201,7 @@ def init_db():
                     f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"
                 )
 
-        # جدول مصاريف العقارات
+        # 6. جدول مصاريف العقارات
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS property_expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,7 +210,7 @@ def init_db():
             )
         """)
 
-        # جدول الموظفين والعمالة
+        # 7. جدول الموظفين والعمالة
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +220,7 @@ def init_db():
             )
         """)
 
-        # جدول المستثمرين
+        # 8. جدول المستثمرين
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS investors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,7 +228,7 @@ def init_db():
             )
         """)
 
-        # جدول تذاكر IT
+        # 9. جدول تذاكر IT
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS it_tickets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -227,7 +236,7 @@ def init_db():
             )
         """)
 
-        # جدول المستندات والأرشيف
+        # 10. جدول المستندات والأرشيف
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,7 +247,7 @@ def init_db():
         conn.commit()
 
 
-# تشغيل التهيئة تلقائياً عند تحميل الكود لضمان وجود الجداول دائماً
+# تشغيل التهيئة تلقائياً عند تحميل التطبيق
 init_db()
 
 
@@ -328,7 +337,7 @@ def login_page():
 
             if login_btn:
                 try:
-                    init_db()  # التأكد مجدداً قبل التنفيذ
+                    init_db()  # ضمان تحديث الهيكل قبل الاستعلام
                     with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
                         cursor = conn.cursor()
                         cursor.execute(
@@ -339,14 +348,16 @@ def login_page():
 
                     if res:
                         st.session_state["logged_in"] = True
-                        st.session_state["user_role"] = res[0]
+                        st.session_state["user_role"] = (
+                            res[0] if res[0] else "Admin"
+                        )
                         st.session_state["username"] = username_input
                         st.success("تم تسجيل الدخول بنجاح!")
                         st.rerun()
                     else:
                         st.error("بيانات الدخول غير صحيحة!")
                 except Exception as e:
-                    st.error(f"حدث خطأ في الاتصال بقاعدة البيانات: {e}")
+                    st.error(f"حدث خطأ أثناء الاتصال: {e}")
 
         else:
             st.info("📱 استعادة كلمة السر عبر كود SMS")
