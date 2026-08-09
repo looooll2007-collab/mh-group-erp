@@ -37,7 +37,6 @@ THEMES = {
         "accent": "#E11D48",
         "border": "#FFE4E6",
     },
-    # 🌟 الثيمات الجديدة المضافة:
     "الليل والسيبربانك (Cyberpunk Neon)": {
         "primary": "#06B6D4",
         "bg": "#0B0F19",
@@ -282,29 +281,56 @@ else:
     st.sidebar.image(st.session_state["profile_pic"], width=90)
 
   st.sidebar.markdown(
-      f"**المستخدم:** {st.session_state['username']}"
-      f" ({st.session_state['user_role']})"
+      f"**المستخدم:** {st.session_state['username']}\n\n**الصلاحية:**"
+      f" {st.session_state['user_role']}"
   )
 
-  dev_toggle = st.sidebar.checkbox(
-      "🛠️ وضع المطور (Developer Mode)",
-      value=st.session_state["is_developer"],
-  )
-  st.session_state["is_developer"] = dev_toggle
+  # 🔐 Role-Based Navigation Routing
+  current_role = st.session_state["user_role"]
 
-  menu_options = [
-      "📊 لوحة التحكم الرئيسية",
-      "👤 الملف الشخصي (Profile)",
-      "👥 إدارة المستخدمين والصلاحيات",
-      "🏡 إدارة العقارات والوحدات",
-      "👷 إدارة الموارد البشرية والعمالة",
-      "💼 قسم المستثمرين والمالية",
-      "💻 قسم تقنية المعلومات (IT Support)",
-      "📑 التقارير وإدارة المستندات",
-  ]
+  # Base Options Available to Everyone
+  menu_options = ["👤 الملف الشخصي (Profile)"]
 
-  if st.session_state["is_developer"]:
-    menu_options.append("⚙️ إعدادات المطور والثيمات")
+  if current_role == "Admin":
+    menu_options = [
+        "📊 لوحة التحكم الرئيسية",
+        "👤 الملف الشخصي (Profile)",
+        "👥 إدارة المستخدمين والصلاحيات",
+        "🏡 إدارة العقارات والوحدات",
+        "👷 إدارة الموارد البشرية والعمالة",
+        "💼 قسم المستثمرين والمالية",
+        "💻 قسم تقنية المعلومات (IT Support)",
+        "📑 التقارير وإدارة المستندات",
+    ]
+    dev_toggle = st.sidebar.checkbox(
+        "🛠️ وضع المطور (Developer Mode)",
+        value=st.session_state["is_developer"],
+    )
+    st.session_state["is_developer"] = dev_toggle
+    if st.session_state["is_developer"]:
+      menu_options.append("⚙️ إعدادات المطور والثيمات")
+
+  elif current_role == "HR":
+    menu_options.extend(
+        ["👷 إدارة الموارد البشرية والعمالة", "📑 التقارير وإدارة المستندات"]
+    )
+    st.session_state["is_developer"] = False
+
+  elif current_role == "Manager":
+    menu_options.extend(
+        ["🏡 إدارة العقارات والوحدات", "📑 التقارير وإدارة المستندات"]
+    )
+    st.session_state["is_developer"] = False
+
+  elif current_role == "Accountant":
+    menu_options.extend(
+        ["💼 قسم المستثمرين والمالية", "📑 التقارير وإدارة المستندات"]
+    )
+    st.session_state["is_developer"] = False
+
+  elif current_role == "IT":
+    menu_options.extend(["💻 قسم تقنية المعلومات (IT Support)"])
+    st.session_state["is_developer"] = False
 
   page = st.sidebar.radio("القائمة الرئيسية", menu_options)
 
@@ -312,7 +338,7 @@ else:
     st.session_state["logged_in"] = False
     st.rerun()
 
-  # --- 1. Dashboard ---
+  # --- 1. Dashboard (Admin Only) ---
   if page == "📊 لوحة التحكم الرئيسية":
     st.markdown(
         "<h1 class='main-header'>📊 لوحة التحكم المتقدمة والملخص العام</h1>",
@@ -365,7 +391,7 @@ else:
       )
       st.dataframe(prop_summary, use_container_width=True)
 
-  # --- 2. Profile Section (Fully Updated) ---
+  # --- 2. Profile Section ---
   elif page == "👤 الملف الشخصي (Profile)":
     st.title("👤 إدارة الملف الشخصي والحساب")
 
@@ -396,21 +422,10 @@ else:
         new_username = st.text_input(
             "اسم المستخدم الحالي:", value=st.session_state["username"]
         )
-        new_role = st.selectbox(
-            "الصلاحية / الوظيفة:",
-            ["Admin", "Manager", "HR", "IT", "Accountant"],
-            index=[
-                "Admin",
-                "Manager",
-                "HR",
-                "IT",
-                "Accountant",
-            ].index(
-                st.session_state["user_role"]
-                if st.session_state["user_role"]
-                in ["Admin", "Manager", "HR", "IT", "Accountant"]
-                else "Admin"
-            ),
+        st.text_input(
+            "الصلاحية الحالية (للقراءة فقط):",
+            value=st.session_state["user_role"],
+            disabled=True,
         )
 
         if st.form_submit_button("حفظ التعديلات"):
@@ -418,14 +433,13 @@ else:
             with sqlite3.connect("mh_group_erp.db") as conn:
               cursor = conn.cursor()
               cursor.execute(
-                  "UPDATE users SET username = ?, role = ? WHERE username = ?",
-                  (new_username, new_role, st.session_state["username"]),
+                  "UPDATE users SET username = ? WHERE username = ?",
+                  (new_username, st.session_state["username"]),
               )
               conn.commit()
 
             st.session_state["username"] = new_username
-            st.session_state["user_role"] = new_role
-            st.success("تم تحديث البيانات الشخصية بنجاح!")
+            st.success("تم تحديث اسم المستخدم بنجاح!")
             st.rerun()
           except sqlite3.IntegrityError:
             st.error("اسم المستخدم الجديد مستخدم بالفعل!")
@@ -480,7 +494,7 @@ else:
         st.success(f"تم حفظ وتطبيق ثيم: {selected_theme_profile}")
         st.rerun()
 
-  # --- 3. Users Management ---
+  # --- 3. Users Management (Admin Only) ---
   elif page == "👥 إدارة المستخدمين والصلاحيات":
     st.title("👥 إدارة المستخدمين والحسابات")
     tab1, tab2, tab3 = st.tabs(
@@ -492,9 +506,11 @@ else:
         u_name = st.text_input("اسم المستخدم")
         u_pass = st.text_input("كلمة المرور", type="password")
         u_role = st.selectbox(
-            "الصلاحية", ["Admin", "Manager", "HR", "IT", "Accountant"]
+            "الصلاحية المحددة",
+            ["Admin", "Manager", "HR", "IT", "Accountant"],
+            help="تحدد الصلاحية الأقسام التي يمكن للمستخدم رؤيتها فقط.",
         )
-        if st.form_submit_button("إضافة"):
+        if st.form_submit_button("إضافة المستخدم"):
           if u_name and u_pass:
             try:
               with sqlite3.connect("mh_group_erp.db") as conn:
@@ -504,9 +520,11 @@ else:
                     (u_name, u_pass, u_role),
                 )
                 conn.commit()
-              st.success("تم إضافة المستخدم بنجاح")
+              st.success(
+                  f"تم إضافة المستخدم '{u_name}' بصلاحية '{u_role}' بنجاح!"
+              )
             except sqlite3.IntegrityError:
-              st.error("اسم المستخدم مسجل مسبقاً")
+              st.error("اسم المستخدم مسجل مسبقاً!")
 
     with tab2:
       st.dataframe(
@@ -786,8 +804,8 @@ else:
           file_name=f"{rep_type}.csv",
       )
 
-  # --- 9. Developer & Themes (With Login Customizer) ---
-  elif page == "⚙️ إعدادات المطور والثيمات":
+  # --- 9. Developer & Themes (Admin Only) ---
+  elif page == "⚙️ إعدادات المطور والثيمات" and current_role == "Admin":
     st.title("⚙️ لوحة تحكم المطور والثيمات")
 
     tab_dev1, tab_dev2 = st.tabs(
