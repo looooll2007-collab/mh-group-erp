@@ -126,13 +126,13 @@ st.markdown(
 
 
 # ==========================================
-# 2. تهيئة قاعدة البيانات والتحديث التلقائي
+# 2. تهيئة قاعدة البيانات والترقية التلقائية
 # ==========================================
 def init_db():
     with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
         cursor = conn.cursor()
 
-        # 1. إنشاء جدول المستخدمين إن لم يكن موجوداً
+        # 1. جدول المستخدمين
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,65 +143,32 @@ def init_db():
             )
         """)
 
-        # 2. فحص وإضافة الأعمدة الناقصة لجدول users تلقائياً (Schema Migration)
         cursor.execute("PRAGMA table_info(users)")
         u_cols = [c[1] for c in cursor.fetchall()]
-
         if "role" not in u_cols:
             cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'Admin'")
         if "phone" not in u_cols:
             cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
 
-        # 3. التأكد من وجود حساب المسؤول Admin
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
             cursor.execute(
                 "INSERT INTO users (username, password, role, phone) VALUES ('admin', 'admin123', 'Admin', '01000000000')"
             )
         else:
-            # تحديث صلاحية admin للتأكد من عدم وجود قيم فارغة
             cursor.execute(
                 "UPDATE users SET role = 'Admin' WHERE username = 'admin' AND (role IS NULL OR role = '')"
             )
 
-        # 4. جدول كلمة سر الأقسام الخاصة
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS section_passwords (
-                section_name TEXT PRIMARY KEY,
-                password TEXT
-            )
-        """)
-
-        # 5. جدول العقارات
+        # 2. جدول العقارات
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS properties (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT, 
-                location TEXT, 
-                price REAL, 
-                status TEXT,
-                type TEXT, 
-                finishing TEXT
+                name TEXT, location TEXT, price REAL, status TEXT, type TEXT, finishing TEXT
             )
         """)
 
-        cursor.execute("PRAGMA table_info(properties)")
-        p_cols = [c[1] for c in cursor.fetchall()]
-        required_p_cols = {
-            "name": "TEXT",
-            "location": "TEXT",
-            "price": "REAL",
-            "status": "TEXT",
-            "type": "TEXT",
-            "finishing": "TEXT",
-        }
-        for col_name, col_type in required_p_cols.items():
-            if col_name not in p_cols:
-                cursor.execute(
-                    f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"
-                )
-
-        # 6. جدول مصاريف العقارات
+        # 3. جدول مصاريف العقارات
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS property_expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,7 +177,7 @@ def init_db():
             )
         """)
 
-        # 7. جدول الموظفين والعمالة
+        # 4. جدول الموظفين والعمالة
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,15 +187,15 @@ def init_db():
             )
         """)
 
-        # 8. جدول المستثمرين
+        # 5. جدول المستثمرين والمالية
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS investors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT, investment_amount REAL, return_rate REAL, start_date TEXT
+                name TEXT, investment_amount REAL, return_rate REAL, start_date TEXT, notes TEXT
             )
         """)
 
-        # 9. جدول تذاكر IT
+        # 6. جدول IT
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS it_tickets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -236,18 +203,16 @@ def init_db():
             )
         """)
 
-        # 10. جدول المستندات والأرشيف
+        # 7. جدول المستندات
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_name TEXT, category TEXT, upload_date TEXT,
-                file_data BLOB, file_type TEXT
+                file_name TEXT, category TEXT, upload_date TEXT, file_data BLOB, file_type TEXT
             )
         """)
         conn.commit()
 
 
-# تشغيل التهيئة تلقائياً عند تحميل التطبيق
 init_db()
 
 
@@ -259,9 +224,6 @@ def safe_read_sql(query, params=()):
         return pd.DataFrame()
 
 
-# ==========================================
-# 3. دالة إرسال الـ SMS الحقيقية عبر البوابة
-# ==========================================
 def send_real_sms(phone_number, code):
     sms_user = st.secrets.get("SMS_USER", "YOUR_USER")
     sms_pass = st.secrets.get("SMS_PASS", "YOUR_PASS")
@@ -278,14 +240,14 @@ def send_real_sms(phone_number, code):
         "message": f"كود التحقق الخاص بك بنظام MH Group ERP هو: {code}",
     }
     try:
-        response = requests.post(url, data=payload, timeout=8)
+        requests.post(url, data=payload, timeout=8)
         return True
     except Exception:
         return False
 
 
 # ==========================================
-# 4. إدارة الجلسة والدخول
+# 3. إدارة الجلسات والدخول
 # ==========================================
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -307,9 +269,6 @@ if "reset_username" not in st.session_state:
     st.session_state["reset_username"] = ""
 
 
-# ==========================================
-# 5. شاشة تسجيل الدخول المخصصة
-# ==========================================
 def login_page():
     cfg = st.session_state["login_config"]
     st.markdown(f"<h1 class='main-header'>{cfg['title']}</h1>", unsafe_allow_html=True)
@@ -337,7 +296,7 @@ def login_page():
 
             if login_btn:
                 try:
-                    init_db()  # ضمان تحديث الهيكل قبل الاستعلام
+                    init_db()
                     with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
                         cursor = conn.cursor()
                         cursor.execute(
@@ -361,7 +320,6 @@ def login_page():
 
         else:
             st.info("📱 استعادة كلمة السر عبر كود SMS")
-
             if st.session_state["reset_stage"] == "request":
                 rec_username = st.text_input("اسم المستخدم:")
                 rec_phone = st.text_input("رقم الهاتف المسجل للحساب:")
@@ -385,7 +343,6 @@ def login_page():
                             st.session_state["reset_username"] = rec_username
 
                             send_real_sms(rec_phone, generated_otp)
-
                             st.session_state["reset_stage"] = "verify"
                             st.success("تم إرسال كود التحقق إلى هاتفك المحمول.")
                             st.rerun()
@@ -401,7 +358,6 @@ def login_page():
                 st.write(
                     f"تم إرسال كود SMS إلى هاتفك المسجل باسم **{st.session_state['reset_username']}**."
                 )
-
                 user_otp = st.text_input(
                     "أدخل كود التحقق المكون من 6 أرقام:",
                     max_chars=6,
@@ -425,7 +381,6 @@ def login_page():
                         st.rerun()
 
             elif st.session_state["reset_stage"] == "new_pass":
-                st.success("🔓 يرجى كتابة كلمة السر الجديدة لتحديث حسابك:")
                 new_reset_pass = st.text_input("كلمة السر الجديدة:", type="password")
                 confirm_reset_pass = st.text_input(
                     "تأكيد كلمة السر الجديدة:", type="password"
@@ -451,7 +406,7 @@ def login_page():
 
 
 # ==========================================
-# 6. لوحة التحكم الرئيسية والأقسام
+# 4. التطبيق الرئيسي والأقسام بكامل محتواها
 # ==========================================
 if not st.session_state["logged_in"]:
     login_page()
@@ -749,11 +704,21 @@ else:
     # --- 4. Properties ---
     elif page == "🏡 إدارة العقارات والوحدات":
         st.title("🏡 إدارة العقارات والوحدات والمصاريف")
-        tab1, tab2, tab3 = st.tabs(
-            ["➕ إضافة عقار", "💸 مصاريف العقارات", "❌ حذف عقار"]
+        tab1, tab2, tab3, tab4 = st.tabs(
+            [
+                "📋 قائمة العقارات",
+                "➕ إضافة عقار",
+                "💸 مصاريف العقارات",
+                "❌ حذف عقار",
+            ]
         )
 
         with tab1:
+            st.dataframe(
+                safe_read_sql("SELECT * FROM properties"), use_container_width=True
+            )
+
+        with tab2:
             with st.form("add_prop"):
                 p_name = st.text_input("اسم العقار / الوحدة")
                 p_type = st.selectbox(
@@ -791,9 +756,9 @@ else:
                         except Exception as e:
                             st.error(f"حدث خطأ أثناء الحفظ: {e}")
                     else:
-                        st.error("يرجى أدخال اسم العقار!")
+                        st.error("يرجى إدخال اسم العقار!")
 
-        with tab2:
+        with tab3:
             props_df = safe_read_sql("SELECT id, name FROM properties")
             if not props_df.empty:
                 with st.form("add_expense_form"):
@@ -836,7 +801,15 @@ else:
                         st.success("تم تسجيل المصروف بنجاح!")
                         st.rerun()
 
-        with tab3:
+            exp_list = safe_read_sql("""
+                SELECT pe.id, p.name as العقار, pe.expense_type as النوع, pe.amount as المبلغ, pe.notes as ملاحظات, pe.date as التاريخ
+                FROM property_expenses pe
+                JOIN properties p ON pe.property_id = p.id
+            """)
+            st.markdown("### 📊 سجّل المصروفات")
+            st.dataframe(exp_list, use_container_width=True)
+
+        with tab4:
             props_df = safe_read_sql("SELECT id, name FROM properties")
             if not props_df.empty:
                 del_id = st.selectbox(
@@ -852,3 +825,238 @@ else:
                         conn.commit()
                     st.success("تم حذف العقار المحدد.")
                     st.rerun()
+
+    # --- 5. HR & Workers ---
+    elif page == "👷 إدارة الموارد البشرية والعمالة":
+        st.title("👷 إدارة الموارد البشرية والعمالة والمستحقات")
+        tab1, tab2, tab3 = st.tabs(
+            [
+                "➕ تسجيل موظف/عمالة",
+                "📊 قائمة الموظفين وحاسبة المستحقات",
+                "❌ حذف سجل",
+            ]
+        )
+
+        with tab1:
+            with st.form("add_emp_form"):
+                e_name = st.text_input("الاسم الكامل")
+                e_type = st.selectbox(
+                    "نوع الفئة:", ["موظف ثابت", "عمالة مؤقتة (بالساعة/اليومية)"]
+                )
+                e_pos = st.text_input("المسمى الوظيفي / الحرفة")
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    e_pay_type = st.selectbox(
+                        "طريقة الاحتساب:", ["راتب شهري", "أجر بالساعة", "أجر يومي"]
+                    )
+                    e_hourly_rate = st.number_input(
+                        "سعر الساعة / اليوم (إن وجد):", min_value=0.0
+                    )
+                with c2:
+                    e_hours_worked = st.number_input(
+                        "عدد الساعات / الأيام المنجزة:", min_value=0.0
+                    )
+                    e_workers_cnt = st.number_input(
+                        "عدد العمال (إن كان طاقم):", min_value=1, value=1
+                    )
+
+                e_total_pay = e_hourly_rate * e_hours_worked * e_workers_cnt
+
+                st.info(f"💵 إجمالي المستحق المحسوب: {e_total_pay:,.2f} EGP")
+
+                if st.form_submit_button("حفظ الموظف / العمالة"):
+                    with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                        conn.execute(
+                            """
+                            INSERT INTO employees (name, emp_type, position, pay_type, hourly_rate, hours_worked, total_pay, hire_date, workers_count)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                e_name,
+                                e_type,
+                                e_pos,
+                                e_pay_type,
+                                e_hourly_rate,
+                                e_hours_worked,
+                                e_total_pay,
+                                str(datetime.date.today()),
+                                e_workers_cnt,
+                            ),
+                        )
+                        conn.commit()
+                    st.success("تم حفظ البيانات بنجاح!")
+                    st.rerun()
+
+        with tab2:
+            st.dataframe(
+                safe_read_sql("SELECT * FROM employees"), use_container_width=True
+            )
+
+        with tab3:
+            emps = safe_read_sql("SELECT id, name FROM employees")
+            if not emps.empty:
+                del_e_id = st.selectbox(
+                    "اختر الموظف للحذف:",
+                    emps["id"],
+                    format_func=lambda x: emps[emps["id"] == x]["name"].values[0],
+                )
+                if st.button("حذف الموظف"):
+                    with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                        conn.execute("DELETE FROM employees WHERE id = ?", (del_e_id,))
+                        conn.commit()
+                    st.success("تم الحذف بنجاح!")
+                    st.rerun()
+
+    # --- 6. Finance & Investors ---
+    elif page == "💼 قسم المستثمرين والمالية":
+        st.title("💼 إدارة المستثمرين والأرباح والمالية")
+        tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "📊 حاسبة الأرباح وسجل الاستثمار"])
+
+        with tab1:
+            with st.form("add_inv"):
+                inv_name = st.text_input("اسم المستثمر")
+                inv_amount = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
+                inv_rate = st.number_input("نسبة الربح السنوية (%)", min_value=0.0)
+                inv_notes = st.text_input("ملاحظات")
+
+                if st.form_submit_button("إضافة المستثمر"):
+                    with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                        conn.execute(
+                            "INSERT INTO investors (name, investment_amount, return_rate, start_date, notes) VALUES (?, ?, ?, ?, ?)",
+                            (
+                                inv_name,
+                                inv_amount,
+                                inv_rate,
+                                str(datetime.date.today()),
+                                inv_notes,
+                            ),
+                        )
+                        conn.commit()
+                    st.success("تم تسحيل المستثمر بنجاح!")
+                    st.rerun()
+
+        with tab2:
+            inv_df = safe_read_sql("SELECT * FROM investors")
+            if not inv_df.empty:
+                inv_df["الأرباح السنوية المتوقعة"] = (
+                    inv_df["investment_amount"] * (inv_df["return_rate"] / 100.0)
+                )
+                st.dataframe(inv_df, use_container_width=True)
+            else:
+                st.info("لا يوجد مستثمرون مسجلون حالياً.")
+
+    # --- 7. IT Support ---
+    elif page == "💻 قسم تقنية المعلومات (IT Support)":
+        st.title("💻 الدعم الفني وتذاكر IT")
+        tab1, tab2 = st.tabs(["➕ إنشاء تذكرة دعم", "📋 التذاكر الحالية"])
+
+        with tab1:
+            with st.form("add_ticket"):
+                t_title = st.text_input("عنوان المشكلة / الطلب")
+                t_cat = st.selectbox(
+                    "التصنيف:",
+                    [
+                        "شبكات وإنترنت",
+                        "أجهزة ومعدات",
+                        "برمجيات وحسابات",
+                        "أخرى",
+                    ],
+                )
+                if st.form_submit_button("إرسال التذكرة"):
+                    with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                        conn.execute(
+                            "INSERT INTO it_tickets (title, category, status, created_at) VALUES (?, ?, ?, ?)",
+                            (
+                                t_title,
+                                t_cat,
+                                "مفتوحة",
+                                str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
+                            ),
+                        )
+                        conn.commit()
+                    st.success("تم إرسال التذكرة بنجاح!")
+                    st.rerun()
+
+        with tab2:
+            st.dataframe(
+                safe_read_sql("SELECT * FROM it_tickets"), use_container_width=True
+            )
+
+    # --- 8. Documents & Reports ---
+    elif page == "📑 التقارير وإدارة المستندات":
+        st.title("📑 الأرشيف الرقمي وإدارة المستندات")
+        tab1, tab2 = st.tabs(["📤 رفع مستند جديد", "📂 الأرشيف والمستندات"])
+
+        with tab1:
+            up_file = st.file_uploader("اختر الملف لرفعه لغرض الأرشيف")
+            doc_cat = st.selectbox(
+                "تصنيف المستند:",
+                ["عقود ورخص", "فواتير ومستندات مالية", "هويات وعمالة", "أخرى"],
+            )
+
+            if st.button("حفظ الملف بالأرشيف") and up_file:
+                bytes_data = up_file.getvalue()
+                with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                    conn.execute(
+                        "INSERT INTO documents (file_name, category, upload_date, file_data, file_type) VALUES (?, ?, ?, ?, ?)",
+                        (
+                            up_file.name,
+                            doc_cat,
+                            str(datetime.date.today()),
+                            bytes_data,
+                            up_file.type,
+                        ),
+                    )
+                    conn.commit()
+                st.success("تم حفظ المستند بالأرشيف بنجاح!")
+                st.rerun()
+
+        with tab2:
+            docs_df = safe_read_sql(
+                "SELECT id, file_name, category, upload_date, file_type FROM documents"
+            )
+            st.dataframe(docs_df, use_container_width=True)
+
+    # --- 9. Developer & Themes Settings ---
+    elif page == "⚙️ إعدادات المطور والثيمات":
+        st.title("⚙️ إعدادات المطور وتخصيص المظهر")
+
+        st.subheader("🎨 تخصيص المظهر والثيمات")
+        theme_choice = st.selectbox(
+            "اختر الثيم المطلوب للنظام:",
+            list(THEMES.keys()),
+            index=list(THEMES.keys()).index(st.session_state["selected_theme"]),
+        )
+        if st.button("تطبيق الثيم"):
+            st.session_state["selected_theme"] = theme_choice
+            st.success("تم تغيير ثيم النظام!")
+            st.rerun()
+
+        st.markdown("---")
+        st.subheader("⚙️ إعدادات واجهة تسجيل الدخول")
+        with st.form("login_cfg_form"):
+            l_title = st.text_input(
+                "عنوان صفحة الدخول:",
+                value=st.session_state["login_config"]["title"],
+            )
+            l_sub = st.text_input(
+                "العنوان الفرعي:",
+                value=st.session_state["login_config"]["subtitle"],
+            )
+            l_btn = st.text_input(
+                "نص زر الدخول:",
+                value=st.session_state["login_config"]["btn_text"],
+            )
+            l_msg = st.text_input(
+                "رسالة الترحيب:",
+                value=st.session_state["login_config"]["welcome_msg"],
+            )
+
+            if st.form_submit_button("حفظ إعدادات الدخول"):
+                st.session_state["login_config"]["title"] = l_title
+                st.session_state["login_config"]["subtitle"] = l_sub
+                st.session_state["login_config"]["btn_text"] = l_btn
+                st.session_state["login_config"]["welcome_msg"] = l_msg
+                st.success("تم تحديث إعدادات الدخول بنجاح!")
+                st.rerun()
