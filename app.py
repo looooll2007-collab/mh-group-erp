@@ -541,6 +541,115 @@ else:
                     "الصلاحية المحددة",
                     ["Admin", "Manager", "HR", "IT", "Accountant"],
                 )
+                
+                if st.form_submit_button("إضافة المستخدم"):
+                    # إزالة المسافات الزائدة من البداية والنهاية
+                    clean_username = u_name.strip()
+                    
+                    if clean_username and u_pass:
+                        try:
+                            with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                                # التحقق أولاً من عدم وجود الاسم بمسافات أو بدون
+                                cursor = conn.cursor()
+                                cursor.execute("SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)", (clean_username,))
+                                existing_user = cursor.fetchone()
+                                
+                                if existing_user:
+                                    st.error(f"❌ المستخدم '{clean_username}' موجود بالفعل في قاعدة البيانات!")
+                                else:
+                                    conn.execute(
+                                        "INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
+                                        (clean_username, u_pass, u_role, u_phone.strip()),
+                                    )
+                                    conn.commit()
+                                    st.success(f"✅ تم إضافة المستخدم '{clean_username}' بنجاح!")
+                                    st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("❌ اسم المستخدم مسجل مسبقاً!")
+                    else:
+                        st.error("يرجى إدخال اسم المستخدم وكلمة المرور!")
+
+        with tab3:
+            users_list_df = safe_read_sql(
+                "SELECT id, username, role, phone FROM users"
+            )
+            if not users_list_df.empty:
+                selected_user_edit = st.selectbox(
+                    "اختر المستخدم للتعديل:", users_list_df["username"]
+                )
+                u_row = users_list_df[
+                    users_list_df["username"] == selected_user_edit
+                ].iloc[0]
+
+                with st.form("edit_user_admin_form"):
+                    e_role = st.selectbox(
+                        "الصلاحية الجديدة:",
+                        ["Admin", "Manager", "HR", "IT", "Accountant"],
+                    )
+                    e_phone = st.text_input(
+                        "رقم الهاتف:", value=str(u_row["phone"] or "")
+                    )
+                    e_pass = st.text_input(
+                        "كلمة مرور جديدة (اتركها فارغة للتجاهل):", type="password"
+                    )
+
+                    if st.form_submit_button("حفظ التعديلات"):
+                        with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "UPDATE users SET role = ?, phone = ? WHERE username = ?",
+                                (e_role, e_phone.strip(), selected_user_edit),
+                            )
+                            if e_pass:
+                                cursor.execute(
+                                    "UPDATE users SET password = ? WHERE username = ?",
+                                    (e_pass, selected_user_edit),
+                                )
+                            conn.commit()
+                        st.success(f"تم تحديث بيانات {selected_user_edit} بنجاح!")
+                        st.rerun()
+
+        with tab4:
+            st.subheader("📋 جميع المستخدمين المسجلين")
+            # إظهار كافة المستخدمين بدون استثناء وتنسيق العرض
+            all_users_df = safe_read_sql("SELECT id as ID, username as 'اسم المستخدم', role as الصلاحية, phone as 'رقم الهاتف' FROM users")
+            st.dataframe(all_users_df, use_container_width=True)
+
+        with tab5:
+            users_df = safe_read_sql(
+                "SELECT id, username FROM users WHERE username != 'admin'"
+            )
+            if not users_df.empty:
+                del_user = st.selectbox(
+                    "اختر المستخدم للحذف:", users_df["username"]
+                )
+                if st.button("حذف الحساب المحدد"):
+                    with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
+                        conn.execute(
+                            "DELETE FROM users WHERE username = ?", (del_user,)
+                        )
+                        conn.commit()
+                    st.success(f"تم حذف الحساب {del_user}")
+                    st.rerun()
+            ]
+        )
+
+        with tab1:
+            st.subheader("🌐 سجل الجلسات المفتوحة وعناوين الـ IP")
+            sessions_df = safe_read_sql(
+                "SELECT id, username as المستخدم, ip_address as 'عنوان IP', login_time as 'تاريخ الدخول', status as الحالة FROM user_sessions ORDER BY id DESC LIMIT 50"
+            )
+            st.dataframe(sessions_df, use_container_width=True)
+
+        with tab2:
+            with st.form("add_user_form"):
+                u_name = st.text_input("اسم المستخدم")
+                u_pass = st.text_input("كلمة المرور", type="password")
+                u_phone = st.text_input("رقم الهاتف")
+                u_role = st.selectbox(
+                    "الصلاحية المحددة",
+                    ["Admin", "Manager", "HR", "IT", "Accountant"],
+                )
                 if st.form_submit_button("إضافة المستخدم"):
                     if u_name and u_pass:
                         try:
