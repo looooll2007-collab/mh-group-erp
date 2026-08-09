@@ -9,8 +9,15 @@ import requests
 import streamlit as st
 
 # ==========================================
-# 1. قائمة الثيمات
+# 1. إعدادات الصفحة والثيمات
 # ==========================================
+st.set_page_config(
+    page_title="MH Group ERP System",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 THEMES = {
     "الداكن الملكي والذهبي (Royal Dark & Gold)": {
         "primary": "#D97706",
@@ -38,13 +45,6 @@ THEMES = {
     },
 }
 
-st.set_page_config(
-    page_title="MH Group ERP System",
-    page_icon="🏢",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 if "selected_theme" not in st.session_state:
     st.session_state["selected_theme"] = (
         "الداكن الملكي والذهبي (Royal Dark & Gold)"
@@ -52,25 +52,21 @@ if "selected_theme" not in st.session_state:
 
 current_theme = THEMES[st.session_state["selected_theme"]]
 
-# --- إعدادات الجلسات ---
+# إعدادات الجلسة والتهيئة
 if "login_config" not in st.session_state:
     st.session_state["login_config"] = {
         "title": "🏢 نظام إدارة MH Group ERP",
         "subtitle": "🔐 تسجيل الدخول للنظام",
         "btn_text": "تسجيل الدخول",
         "welcome_msg": "مرحباً بك! يرجى إدخال بياناتك للمتابعة.",
-        "logo_bytes": None,
-        "google_enabled": True,
-        "microsoft_enabled": True,
     }
 
 if "dashboard_config" not in st.session_state:
     st.session_state["dashboard_config"] = {
         "header_title": "📊 لوحة التحكم المتقدمة والملخص العام",
-        "show_metrics": True,
-        "custom_note": "أهلاً بك في لوحة تحكم النظام العامة. يمكنك متابعة العمليات من هنا.",
     }
 
+# تطبيق تنسيقات CSS
 st.markdown(
     f"""
 <style>
@@ -113,7 +109,7 @@ st.markdown(
 
 
 # ==========================================
-# 2. تهيئة قاعدة البيانات والأمان
+# 2. تهيئة قاعدة البيانات والتحديث التلقائي
 # ==========================================
 def get_db_connection():
     return sqlite3.connect("mh_group_erp.db", timeout=20)
@@ -123,6 +119,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # 1. جدول المستخدمين
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +130,7 @@ def init_db():
         )
     """)
 
+    # 2. جدول الجلسات
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +142,7 @@ def init_db():
         )
     """)
 
+    # 3. جدول العقارات
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +150,7 @@ def init_db():
         )
     """)
 
+    # 4. جدول مصروفات العقارات
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS property_expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,6 +158,7 @@ def init_db():
         )
     """)
 
+    # 5. جدول الموظفين والعمالة
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,6 +168,7 @@ def init_db():
         )
     """)
 
+    # 6. جدول المستثمرين
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS investors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +176,13 @@ def init_db():
         )
     """)
 
+    # --- 🛠️ فحص وتعديل أوتوماتيكي لجدول المستثمرين لمنع خطأ missing column notes ---
+    try:
+        cursor.execute("SELECT notes FROM investors LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE investors ADD COLUMN notes TEXT")
+
+    # 7. جدول الدعم الفني
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS it_tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,6 +190,7 @@ def init_db():
         )
     """)
 
+    # 8. جدول المستندات
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,6 +198,7 @@ def init_db():
         )
     """)
 
+    # حساب المسؤول الافتراضي
     cursor.execute("SELECT * FROM users WHERE LOWER(TRIM(username)) = 'admin'")
     if not cursor.fetchone():
         cursor.execute(
@@ -198,6 +209,7 @@ def init_db():
     conn.close()
 
 
+# تشغيل التهيئة
 init_db()
 
 
@@ -241,7 +253,7 @@ def log_session_start(username):
 
 
 # ==========================================
-# 3. تسجيل الدخول للجلسات
+# 3. إدارة الجلسة وتسجيل الدخول
 # ==========================================
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -251,10 +263,6 @@ if "username" not in st.session_state:
     st.session_state["username"] = ""
 if "is_developer" not in st.session_state:
     st.session_state["is_developer"] = False
-if "profile_pic" not in st.session_state:
-    st.session_state["profile_pic"] = None
-if "show_forgot_password" not in st.session_state:
-    st.session_state["show_forgot_password"] = False
 
 
 def login_page():
@@ -292,7 +300,7 @@ def login_page():
 
 
 # ==========================================
-# 4. لوحة ERP والأقسام
+# 4. التطبيق الرئيسي والأقسام
 # ==========================================
 if not st.session_state["logged_in"]:
     login_page()
@@ -311,7 +319,6 @@ else:
 
     all_pages = [
         "📊 لوحة التحكم الرئيسية",
-        "👤 الملف الشخصي (Profile)",
         "👥 إدارة المستخدمين والصلاحيات والجلسات",
         "🏡 إدارة العقارات والوحدات",
         "👷 إدارة الموارد البشرية والعمالة",
@@ -333,13 +340,13 @@ else:
         st.session_state["logged_in"] = False
         st.rerun()
 
-    # --- 1. Dashboard ---
+    # --- 1. لوحة التحكم ---
     if page == "📊 لوحة التحكم الرئيسية":
         st.markdown(
             f"<h1 class='main-header'>{st.session_state['dashboard_config']['header_title']}</h1>",
             unsafe_allow_html=True,
         )
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
         c1.metric(
             "إجمالي العقارات",
             f"{len(safe_read_sql('SELECT id FROM properties'))} وحدة",
@@ -348,27 +355,18 @@ else:
             "العمالة والموظفين",
             f"{len(safe_read_sql('SELECT id FROM employees'))} فرد",
         )
-        inv_sum = (
-            safe_read_sql(
-                "SELECT SUM(investment_amount) as s FROM investors"
-            )["s"].fillna(0)[0]
-            if not safe_read_sql(
-                "SELECT SUM(investment_amount) as s FROM investors"
-            ).empty
-            else 0
-        )
+        inv_df = safe_read_sql("SELECT investment_amount FROM investors")
+        inv_sum = inv_df["investment_amount"].sum() if not inv_df.empty else 0
         c3.metric("حجم الاستثمارات", f"{inv_sum:,.0f} EGP")
 
-    # --- 3. Users Management (Fixed) ---
+    # --- 2. إدارة المستخدمين ---
     elif page == "👥 إدارة المستخدمين والصلاحيات والجلسات":
-        st.title("👥 إدارة المستخدمين")
-        tab1, tab2 = st.tabs(["📋 القائمة", "➕ إضافة مستخدم"])
+        st.title("👥 إدارة المستخدمين والأنشطة")
+        tab1, tab2 = st.tabs(["📋 قائمة المستخدمين", "➕ إضافة مستخدم"])
 
         with tab1:
             st.dataframe(
-                safe_read_sql(
-                    "SELECT id, username, role, phone FROM users"
-                ),
+                safe_read_sql("SELECT id, username, role, phone FROM users"),
                 use_container_width=True,
             )
 
@@ -381,7 +379,7 @@ else:
             if "form_key_u" not in st.session_state:
                 st.session_state["form_key_u"] = 0
 
-            with st.form(f"add_user_f_{st.session_state['form_key_u']}"):
+            with st.form(f"add_user_form_{st.session_state['form_key_u']}"):
                 u_n = st.text_input("اسم المستخدم")
                 u_p = st.text_input("كلمة المرور", type="password")
                 u_ph = st.text_input("رقم الهاتف")
@@ -391,33 +389,136 @@ else:
 
                 if st.form_submit_button("إضافة المستخدم"):
                     clean_u = u_n.strip()
-                    if clean_u and u_p.strip():
-                        conn = get_db_connection()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)",
-                            (clean_u,),
-                        )
-                        if cursor.fetchone():
-                            st.session_state["u_msg_err"] = (
-                                f"❌ المستخدم '{clean_u}' موجود بالفعل!"
-                            )
-                        else:
+                    clean_p = u_p.strip()
+
+                    if clean_u and clean_p:
+                        try:
+                            conn = get_db_connection()
+                            cursor = conn.cursor()
+
+                            # فحص الوجود المسبق
                             cursor.execute(
-                                "INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
-                                (clean_u, u_p.strip(), u_r, u_ph.strip()),
+                                "SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)",
+                                (clean_u,),
                             )
-                            conn.commit()
-                            st.session_state["u_msg_succ"] = (
-                                f"✅ تم إضافة '{clean_u}' بنجاح!"
+                            if cursor.fetchone():
+                                st.session_state["u_msg_err"] = (
+                                    f"❌ المستخدم '{clean_u}' مسجل مسبقاً!"
+                                )
+                            else:
+                                cursor.execute(
+                                    "INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
+                                    (clean_u, clean_p, u_r, u_ph.strip()),
+                                )
+                                conn.commit()
+                                st.session_state["u_msg_succ"] = (
+                                    f"✅ تم إضافة المستخدم '{clean_u}' بنجاح!"
+                                )
+                            conn.close()
+                        except sqlite3.IntegrityError:
+                            st.session_state["u_msg_err"] = (
+                                f"❌ اسم المستخدم '{clean_u}' مسجل مسبقاً!"
                             )
-                        conn.close()
+                        except Exception as e:
+                            st.session_state["u_msg_err"] = f"❌ حدث خطأ: {e}"
+
                         st.session_state["form_key_u"] += 1
                         st.rerun()
                     else:
-                        st.error("يرجى ملء كافة الحقول!")
+                        st.error("يرجى إدخال اسم المستخدم وكلمة المرور!")
 
-    # --- 6. Investors & Finance (FIXED OperationalError) ---
+    # --- 3. إدارة العقارات والوحدات ---
+    elif page == "🏡 إدارة العقارات والوحدات":
+        st.title("🏡 إدارة العقارات والوحدات")
+        tab1, tab2 = st.tabs(["📋 سجل العقارات", "➕ إضافة عقار"])
+
+        with tab1:
+            st.dataframe(
+                safe_read_sql("SELECT * FROM properties"),
+                use_container_width=True,
+            )
+
+        with tab2:
+            with st.form("add_prop_form"):
+                p_name = st.text_input("اسم العقار/الوحدة")
+                p_loc = st.text_input("الموقع")
+                p_price = st.number_input("السعر (EGP)", min_value=0.0)
+                p_status = st.selectbox(
+                    "الحالة", ["متاح", "مباع", "قيد التشطيب", "محجوز"]
+                )
+                p_type = st.selectbox(
+                    "النوع", ["شقة", "فيلا", "محل تجاري", "أرض"]
+                )
+                p_finishing = st.selectbox(
+                    "التشطيب", ["بدون", "نصف تشطيب", "تشطيب كامل", "سوبر لوكس"]
+                )
+
+                if st.form_submit_button("إضافة العقار"):
+                    if p_name.strip():
+                        try:
+                            conn = get_db_connection()
+                            conn.execute(
+                                "INSERT INTO properties (name, location, price, status, type, finishing) VALUES (?, ?, ?, ?, ?, ?)",
+                                (
+                                    p_name.strip(),
+                                    p_loc.strip(),
+                                    p_price,
+                                    p_status,
+                                    p_type,
+                                    p_finishing,
+                                ),
+                            )
+                            conn.commit()
+                            conn.close()
+                            st.success("✅ تم حفظ العقار بنجاح!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"حدث خطأ: {e}")
+                    else:
+                        st.error("يرجى كتابة اسم العقار!")
+
+    # --- 4. إدارة الموارد البشرية والعمالة ---
+    elif page == "👷 إدارة الموارد البشرية والعمالة":
+        st.title("👷 إدارة العمالة والموظفين")
+        tab1, tab2 = st.tabs(["📋 سجل العمالة", "➕ إضافة عامل / موظف"])
+
+        with tab1:
+            st.dataframe(
+                safe_read_sql("SELECT * FROM employees"),
+                use_container_width=True,
+            )
+
+        with tab2:
+            with st.form("add_emp_form"):
+                e_name = st.text_input("الاسم")
+                e_pos = st.text_input("الوظيفة / الحرفة")
+                e_type = st.selectbox("نوع التعيين", ["موظف", "عامل يومية", "مقاول"])
+                e_pay = st.number_input("الأجر / الراتب (EGP)", min_value=0.0)
+
+                if st.form_submit_button("حفظ البيانات"):
+                    if e_name.strip():
+                        try:
+                            conn = get_db_connection()
+                            conn.execute(
+                                "INSERT INTO employees (name, position, emp_type, total_pay, hire_date) VALUES (?, ?, ?, ?, ?)",
+                                (
+                                    e_name.strip(),
+                                    e_pos.strip(),
+                                    e_type,
+                                    e_pay,
+                                    str(datetime.date.today()),
+                                ),
+                            )
+                            conn.commit()
+                            conn.close()
+                            st.success("✅ تم حفظ البيانات بنجاح!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"حدث خطأ: {e}")
+                    else:
+                        st.error("يرجى إدخال اسم الفرد!")
+
+    # --- 5. قسم المستثمرين والمالية ---
     elif page == "💼 قسم المستثمرين والمالية":
         st.title("💼 إدارة المستثمرين والأرباح والمالية")
         tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "📊 حاسبة الأرباح وسجل الاستثمار"])
@@ -433,12 +534,17 @@ else:
 
             with st.form(f"add_inv_form_{st.session_state['inv_form_key']}"):
                 inv_name = st.text_input("اسم المستثمر")
-                inv_amount = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
-                inv_rate = st.number_input("نسبة الربح السنوية (%)", min_value=0.0)
+                inv_amount = st.number_input(
+                    "مبلغ الاستثمار (EGP)", min_value=0.0
+                )
+                inv_rate = st.number_input(
+                    "نسبة الربح السنوية (%)", min_value=0.0
+                )
                 inv_notes = st.text_input("ملاحظات")
 
                 if st.form_submit_button("إضافة المستثمر"):
-                    if inv_name.strip() and inv_amount > 0:
+                    clean_inv_name = inv_name.strip()
+                    if clean_inv_name and inv_amount > 0:
                         try:
                             conn = get_db_connection()
                             cursor = conn.cursor()
@@ -448,7 +554,7 @@ else:
                                 VALUES (?, ?, ?, ?, ?)
                             """,
                                 (
-                                    inv_name.strip(),
+                                    clean_inv_name,
                                     float(inv_amount),
                                     float(inv_rate),
                                     str(datetime.date.today()),
@@ -457,18 +563,16 @@ else:
                             )
                             conn.commit()
                             conn.close()
-
                             st.session_state["inv_msg_succ"] = (
-                                f"✅ تم حفظ المستثمر {inv_name} بنجاح!"
+                                f"✅ تم حفظ المستثمر '{clean_inv_name}' بنجاح!"
                             )
-                            st.session_state["inv_form_key"] += 1
-                            st.rerun()
                         except Exception as e:
                             st.session_state["inv_msg_err"] = (
-                                f"❌ تعذر الحفظ لقاعدة البيانات: {e}"
+                                f"❌ تعذر الحفظ: {e}"
                             )
-                            st.session_state["inv_form_key"] += 1
-                            st.rerun()
+
+                        st.session_state["inv_form_key"] += 1
+                        st.rerun()
                     else:
                         st.error("يرجى كتابة اسم المستثمر ومبلغ أكبر من صفر!")
 
@@ -476,9 +580,30 @@ else:
             st.subheader("📊 سجل المستثمرين وحساب الأرباح")
             inv_df = safe_read_sql("SELECT * FROM investors")
             if not inv_df.empty:
-                inv_df["الأرباح السنوية المتوقعة"] = (
-                    inv_df["investment_amount"] * (inv_df["return_rate"] / 100.0)
-                )
+                if (
+                    "investment_amount" in inv_df.columns
+                    and "return_rate" in inv_df.columns
+                ):
+                    inv_df["الأرباح السنوية المتوقعة (EGP)"] = inv_df[
+                        "investment_amount"
+                    ] * (inv_df["return_rate"] / 100.0)
                 st.dataframe(inv_df, use_container_width=True)
             else:
                 st.info("لا يوجد مستثمرون مسجلون حالياً.")
+
+    # --- 6. قسم تقنية المعلومات ---
+    elif page == "💻 قسم تقنية المعلومات (IT Support)":
+        st.title("💻 الدعم الفني وتقنية المعلومات")
+        st.info("نظام تتبع بلاغات المطور والدعم الفني.")
+        st.dataframe(
+            safe_read_sql("SELECT * FROM it_tickets"), use_container_width=True
+        )
+
+    # --- 7. التقارير والمستندات ---
+    elif page == "📑 التقارير وإدارة المستندات":
+        st.title("📑 إدارة المستندات والتقارير")
+        st.info("الأرشيف الإلكتروني والتقارير المجمعة.")
+        st.dataframe(
+            safe_read_sql("SELECT id, file_name, category, upload_date FROM documents"),
+            use_container_width=True,
+        )
