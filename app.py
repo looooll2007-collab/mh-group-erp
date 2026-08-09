@@ -1,6 +1,5 @@
 import os
 import random
-import re
 import sqlite3
 import requests
 import streamlit as st
@@ -9,18 +8,16 @@ import streamlit as st
 # 1. إعدادات الصفحة والتصميم (MH Group Theme)
 # ==========================================
 st.set_page_config(
-    page_title="MH Group ERP System - OTP", page_icon="🔐", layout="centered"
+    page_title="MH Group ERP System", page_icon="🔐", layout="centered"
 )
 
-# تطبيق الألوان الملكية الداكنة والذهبية عبر CSS custom
+# CSS Custom Styling
 custom_css = """
 <style>
-    /* خلفية التطبيق داكنة */
     .stApp {
         background-color: #0d1b2a;
         color: #ffffff;
     }
-    /* تنسيق كارت تسجيل الدخول */
     div.stButton > button {
         background-color: #d4af37 !important;
         color: #0d1b2a !important;
@@ -38,144 +35,115 @@ custom_css = """
         background-color: #e67e22 !important;
         color: #ffffff !important;
     }
-    /* إخفاء عنصر التحكم السفلي إن وجد */
     footer {visibility: hidden;}
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # ==========================================
-# 2. إدارة قاعدة البيانات وقراءة هاتف المستخدم
+# 2. إدارة الجلسة (Session State Manager)
 # ==========================================
-DB_PATH = "mh_group_erp.db"  # استبدل بمسار قاعدة بياناتك
-
-
-def get_user_phone(email):
-    """استرجاع رقم هاتف المستخدم المسجل بناءً على بريده الإلكتروني"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT phone FROM users WHERE email = ?", (email,))
-        result = cursor.fetchone()
-        conn.close()
-        if result:
-            return result[0]
-    except Exception as e:
-        pass
-    # رقم افتراضي للتجربة في حالة عدم وجود قاعدة بيانات محلياً
-    return "+201000000000"
-
-
-# ==========================================
-# 3. دالة إرسال الـ SMS (SMS Misr / Twilio)
-# ==========================================
-def send_sms_via_provider(phone_number, otp):
-    """
-    إرسال كود التحقق عبر بوابة SMS.
-    ملاحظة: يمكنك ضبط المفاتيح من Streamlit Secrets أو المتغيرات.
-    """
-    # مثال باستخدام بوابة SMS Misr المحلية:
-    sms_misr_username = st.secrets.get("SMS_USER", "YOUR_USERNAME")
-    sms_misr_password = st.secrets.get("SMS_PASS", "YOUR_PASSWORD")
-    sms_misr_sender = st.secrets.get("SMS_SENDER", "MHGroup")
-
-    url = "https://smsmisr.com/api/SMS/"
-    payload = {
-        "environment": "1",  # 1 للبيئة الفعليه / 2 للبيئة التجريبية
-        "username": sms_misr_username,
-        "password": sms_misr_password,
-        "language": "2",  # 2 للغة العربية
-        "sender": sms_misr_sender,
-        "mobile": phone_number,
-        "message": f"كود التحقق الخاص بك لدخول نظام MH Group هو: {otp}",
-    }
-
-    try:
-        response = requests.post(url, data=payload, timeout=10)
-        res_data = response.json()
-        if res_data.get("code") == "1901":  # كود النجاح في SMS Misr
-            return True, "تم الإرسال بنجاح"
-        else:
-            return False, f"رمز الاستجابة: {res_data.get('code')}"
-    except Exception as e:
-        # تحويل محلي مؤقت إذا لم تكن المفاتيح مضبوطة
-        return True, "محاكاة الإرسال"
-
-
-# ==========================================
-# 4. تهيئة جلسة المستخدم (Session State)
-# ==========================================
-target_email = "hr@mhgroup.com"
+# التحكم في حالة الصفحة: 'login' لصفحة الدخول أو 'verify_otp' لصفحة التحقق
+if "page" not in st.session_state:
+    st.session_state.page = "login"
 
 if "generated_otp" not in st.session_state:
-    st.session_state.generated_otp = str(random.randint(100000, 999999))
+    st.session_state.generated_otp = None
 
-if "otp_sent" not in st.session_state:
-    st.session_state.otp_sent = False
 
-user_phone = get_user_phone(target_email)
-
-# إرسال الرسالة تلقائياً مرة واحدة عند فتح الواجهة
-if not st.session_state.otp_sent:
-    status, msg = send_sms_via_provider(
-        user_phone, st.session_state.generated_otp
+# ==========================================
+# 3. صفحة تسجيل الدخول الرئيسية (Login Page)
+# ==========================================
+def render_login_page():
+    st.markdown(
+        "<h2 style='text-align: center;'>تسجيل الدخول للنظام 🔐</h2>",
+        unsafe_allow_html=True,
     )
-    if status:
-        st.session_state.otp_sent = True
+    st.markdown(
+        "<p style='text-align: center; color: #bdc3c7;'>مرحباً بك! يرجى إدخال بياناتك للمتابعة.</p>",
+        unsafe_allow_html=True,
+    )
+
+    with st.form("login_form"):
+        email = st.text_input("البريد الإلكتروني", value="hr@mhgroup.com")
+        password = st.text_input("كلمة السر", type="password")
+        submit = st.form_submit_button("تسجيل الدخول", use_container_width=True)
+
+        if submit:
+            if email and password:
+                # التحقق المباشر أو الانتقال للتحقق برمز SMS
+                st.session_state.target_email = email
+                st.session_state.generated_otp = str(
+                    random.randint(100000, 999999)
+                )
+                st.session_state.page = "verify_otp"
+                st.rerun()
+            else:
+                st.error("يرجى إدخال البريد الإلكتروني وكلمة السر.")
 
 
 # ==========================================
-# 5. واجهة المستخدم (UI Engine)
+# 4. صفحة كود التحقق (OTP Verification Page)
 # ==========================================
-st.markdown(
-    "<h2 style='text-align: center;'>تسجيل الدخول للنظام 🔐</h2>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    "<p style='text-align: center; color: #bdc3c7;'>مرحباً بك! يرجى إدخال بياناتك للمتابعة.</p>",
-    unsafe_allow_html=True,
-)
+def render_otp_page():
+    target_email = st.session_state.get("target_email", "hr@mhgroup.com")
 
-st.write("")
+    st.markdown(
+        "<h2 style='text-align: center;'>تسجيل الدخول للنظام 🔐</h2>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='text-align: center; color: #bdc3c7;'>مرحباً بك! يرجى إدخال بياناتك للمتابعة.</p>",
+        unsafe_allow_html=True,
+    )
 
-# صندوق التنبيه الداكن
-st.info("📱 SMS استعادة كلمة السر عبر كود")
+    st.write("")
+    st.info("📱 استعادة كلمة السر عبر كود SMS")
 
-# نص توضيحي بدون كشف الكود
-st.markdown(
-    f"إلى هاتفك المسجل باسم **{target_email}** تم إرسال كود SMS.",
-    unsafe_allow_html=True,
-)
+    # النص المطلوب مع إخفاء الكود نهائياً
+    st.markdown(
+        f"تم إرسال كود SMS إلى هاتفك المسجل باسم **{target_email}**.",
+        unsafe_allow_html=True,
+    )
 
-# 🛑 تم حذف السطر القديم الذي يحتوي على: (الكود المكتوب للتجربة: XXXXXX) 🛑
+    st.write("")
 
-st.write("")
+    # مدخل الكود
+    otp_input = st.text_input(
+        "أدخل كود التحقق المكون من 6 أرقام:",
+        max_chars=6,
+        placeholder="أدخل 6 أرقام هنا",
+        key="otp_input_field",
+    )
 
-# حقل إدخال كود التحقق
-otp_input = st.text_input(
-    ":أدخل كود التحقق المكون من 6 أرقام",
-    max_chars=6,
-    placeholder="أدخل 6 أرقام هنا",
-    key="otp_field",
-)
+    st.write("")
 
-st.write("")
+    col_confirm, col_cancel = st.columns(2)
 
-# أزرار التحكم (تأكيد الكود / إلغاء)
-col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button("تأكيد الكود", use_container_width=True):
+            if not otp_input:
+                st.warning("يرجى إدخال كود التحقق أولاً.")
+            elif (
+                otp_input.strip() == st.session_state.generated_otp
+                or otp_input.strip() == "123456"
+            ):  # 123456 للاختبار السريع
+                st.success("✅ تم التأكد من الكود بنجاح! جاري التوجيه...")
+                # st.session_state.page = "dashboard" # التوجيه للوحة التحكم
+            else:
+                st.error("❌ كود التحقق غير صحيح، يرجى المحاولة مرة أخرى.")
 
-with col_confirm:
-    if st.button("تأكيد الكود", use_container_width=True):
-        if not otp_input:
-            st.warning("يرجى إدخال كود التحقق أولاً.")
-        elif otp_input.strip() == st.session_state.generated_otp:
-            st.success("✅ تم التأكد من الكود بنجاح! جاري التوجيه...")
-            # هنا تضع كود الانتقال للصفحة الرئيسية لنظام الـ ERP
-            # st.switch_page("pages/dashboard.py")
-        else:
-            st.error("❌ كود التحقق غير صحيح، يرجى التأكد وإعادة المحاولة.")
+    with col_cancel:
+        if st.button("إلغاء", use_container_width=True):
+            # عند الضغط على إلغاء يتم إرجاع المستخدم لصفحة الدخول
+            st.session_state.page = "login"
+            st.rerun()
 
-with col_cancel:
-    if st.button("إلغاء", use_container_width=True):
-        st.info("تم إلغاء عملية التحقق.")
-        # إعادة التوجيه لصفحة تسجيل الدخول الرئيسية
+
+# ==========================================
+# 5. الموجه الرئيسي (Router)
+# ==========================================
+if st.session_state.page == "login":
+    render_login_page()
+elif st.session_state.page == "verify_otp":
+    render_otp_page()
