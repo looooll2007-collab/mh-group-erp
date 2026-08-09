@@ -150,7 +150,7 @@ st.markdown(
 )
 
 
-# --- Database Initialization & Auto Migration ---
+# --- Database Initialization & Safe Auto Migration ---
 def init_db():
     with sqlite3.connect("mh_group_erp.db") as conn:
         cursor = conn.cursor()
@@ -177,17 +177,29 @@ def init_db():
                 "INSERT INTO users (username, password, role, phone) VALUES ('admin', 'admin123', 'Admin', '01000000000')"
             )
 
-        # Properties Table
+        # Properties Table (Auto Migration for missing columns)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS properties (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT, location TEXT, price REAL, status TEXT,
-                type TEXT, finishing TEXT
+                name TEXT, 
+                location TEXT, 
+                price REAL, 
+                status TEXT,
+                type TEXT, 
+                finishing TEXT
             )
         """)
 
         cursor.execute("PRAGMA table_info(properties)")
         p_cols = [c[1] for c in cursor.fetchall()]
+        if "name" not in p_cols:
+            cursor.execute("ALTER TABLE properties ADD COLUMN name TEXT")
+        if "location" not in p_cols:
+            cursor.execute("ALTER TABLE properties ADD COLUMN location TEXT")
+        if "price" not in p_cols:
+            cursor.execute("ALTER TABLE properties ADD COLUMN price REAL")
+        if "status" not in p_cols:
+            cursor.execute("ALTER TABLE properties ADD COLUMN status TEXT")
         if "type" not in p_cols:
             cursor.execute("ALTER TABLE properties ADD COLUMN type TEXT")
         if "finishing" not in p_cols:
@@ -216,7 +228,7 @@ def init_db():
             )
         """)
 
-        # Investors Table (Ensuring all columns exist)
+        # Investors Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS investors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -358,7 +370,7 @@ def login_page():
                             st.session_state["reset_username"] = rec_username
                             st.session_state["reset_stage"] = "verify"
                             st.toast(
-                                f"📱 [SMS] كود التحقق لرقمك: {generated_otp}",
+                                f"📱 [SMS] كود التحقق לרقمك: {generated_otp}",
                                 icon="📩",
                             )
                             st.rerun()
@@ -731,7 +743,7 @@ else:
                     st.success(f"تم حذف الحساب {del_user}")
                     st.rerun()
 
-    # --- 4. Properties ---
+    # --- 4. Properties (Fixed & Exception Safe) ---
     elif page == "🏡 إدارة العقارات والوحدات":
         st.title("🏡 إدارة العقارات والوحدات والمصاريف")
         tab1, tab2, tab3 = st.tabs(
@@ -756,22 +768,27 @@ else:
                 )
 
                 if st.form_submit_button("حفظ العقار"):
-                    if p_name:
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            conn.execute(
-                                "INSERT INTO properties (name, location, price, status, type, finishing) VALUES (?, ?, ?, ?, ?, ?)",
-                                (
-                                    p_name,
-                                    p_loc,
-                                    float(p_price),
-                                    p_stat,
-                                    p_type,
-                                    p_finishing,
-                                ),
-                            )
-                            conn.commit()
-                        st.success("تم إضافة العقار بنجاح")
-                        st.rerun()
+                    if p_name.strip():
+                        try:
+                            with sqlite3.connect("mh_group_erp.db") as conn:
+                                conn.execute(
+                                    "INSERT INTO properties (name, location, price, status, type, finishing) VALUES (?, ?, ?, ?, ?, ?)",
+                                    (
+                                        p_name.strip(),
+                                        p_loc,
+                                        float(p_price),
+                                        p_stat,
+                                        p_type,
+                                        p_finishing,
+                                    ),
+                                )
+                                conn.commit()
+                            st.success("تم إضافة العقار بنجاح!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"حدث خطأ أثناء الحفظ: {e}")
+                    else:
+                        st.warning("يرجى إدخال اسم العقار!")
 
         with tab2:
             st.subheader("💸 تسجيل مصاريف على العقارات")
@@ -952,7 +969,7 @@ else:
             use_container_width=True,
         )
 
-    # --- 6. Investors (Fixed Section) ---
+    # --- 6. Investors ---
     elif page == "💼 قسم المستثمرين والمالية":
         st.title("💼 قسم المستثمرين والرسوم البيانية")
         tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "❌ حذف مستثمر"])
