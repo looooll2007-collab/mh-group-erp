@@ -3,14 +3,7 @@ import pandas as pd
 import sqlite3
 import datetime
 
-# --- Session State Initialization ---
-if "selected_theme" not in st.session_state:
-    st.session_state["selected_theme"] = "أزرق نيلي احترافي (Modern Indigo)"
-
-if "is_developer" not in st.session_state:
-    st.session_state["is_developer"] = False
-
-# --- Modern & High-Contrast Theme Palette ---
+# --- Theme Palette Configuration ---
 THEMES = {
     "أزرق نيلي احترافي (Modern Indigo)": {
         "primary": "#4F46E5",
@@ -46,6 +39,16 @@ THEMES = {
     }
 }
 
+# --- Preserve Theme Across Refresh via Query Params ---
+query_params = st.query_params
+saved_theme = query_params.get("theme", "أزرق نيلي احترافي (Modern Indigo)")
+
+if saved_theme not in THEMES:
+    saved_theme = "أزرق نيلي احترافي (Modern Indigo)"
+
+if "selected_theme" not in st.session_state:
+    st.session_state["selected_theme"] = saved_theme
+
 current_theme = THEMES[st.session_state["selected_theme"]]
 
 # --- Page Configuration ---
@@ -59,55 +62,42 @@ st.set_page_config(
 # --- Dynamic Inject Styles ---
 st.markdown(f"""
 <style>
-    /* Hide Keyboard Badges & Hover Tooltips */
     [title*="keyboard"], [title*="Keyboard"], [data-testid="stHeader"] button title {{
         display: none !important;
     }}
-    
-    /* Global Styles */
     .stApp {{
         background-color: {current_theme["bg"]} !important;
         color: {current_theme["text"]} !important;
     }}
-    
     .main-header {{
-        font-size: 2.2rem;
+        font-size: 2rem;
         font-weight: 800;
         color: {current_theme["primary"]} !important;
         text-align: center;
-        margin-bottom: 25px;
-        padding: 15px;
+        margin-bottom: 20px;
+        padding: 12px;
         border-bottom: 3px solid {current_theme["accent"]};
         background-color: {current_theme["card"]};
         border-radius: 10px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }}
-    
     div[data-testid="stMetric"] {{
         background-color: {current_theme["card"]} !important;
-        padding: 18px !important;
+        padding: 15px !important;
         border-radius: 12px !important;
         border: 1px solid {current_theme["border"]} !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }}
-
     section[data-testid="stSidebar"] {{
         background-color: {current_theme["card"]} !important;
         border-right: 1px solid {current_theme["border"]} !important;
     }}
-
-    /* Buttons Styling */
     .stButton>button {{
         background-color: {current_theme["primary"]} !important;
         color: white !important;
         border-radius: 8px !important;
         border: none !important;
         font-weight: bold !important;
-        padding: 0.5rem 1rem !important;
-    }}
-    .stButton>button:hover {{
-        background-color: {current_theme["accent"]} !important;
-        color: white !important;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -125,7 +115,6 @@ def init_db():
             role TEXT
         )
     ''')
-    
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO users (username, password, role) VALUES ('admin', 'admin123', 'Admin')")
@@ -140,7 +129,8 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT, position TEXT, salary REAL, hire_date TEXT
+            name TEXT, emp_type TEXT, position TEXT, pay_type TEXT,
+            hourly_rate REAL, hours_worked REAL, daily_rate REAL, total_pay REAL, hire_date TEXT
         )
     ''')
     
@@ -158,6 +148,13 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_name TEXT, category TEXT, upload_date TEXT
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -170,10 +167,11 @@ if "user_role" not in st.session_state:
     st.session_state["user_role"] = ""
 if "username" not in st.session_state:
     st.session_state["username"] = ""
+if "is_developer" not in st.session_state:
+    st.session_state["is_developer"] = False
 
 def login_page():
     st.markdown("<h1 class='main-header'>🏢 نظام إدارة MH Group ERP</h1>", unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.subheader("🔐 تسجيل الدخول")
@@ -207,13 +205,13 @@ else:
     st.session_state["is_developer"] = dev_toggle
 
     menu_options = [
-        "لوحة التحكم الرئيسية",
+        "📊 لوحة التحكم الرئيسية",
         "👥 إدارة المستخدمين والصلاحيات",
-        "إدارة العقارات والوحدات",
-        "إدارة الموارد البشرية (HR)",
-        "قسم المستثمرين والمالية",
-        "قسم تقنية المعلومات (IT Support)",
-        "التقارير والمستندات"
+        "🏡 إدارة العقارات والوحدات",
+        "👷 إدارة الموارد البشرية والعمالة",
+        "💼 قسم المستثمرين والمالية",
+        "💻 قسم تقنية المعلومات (IT Support)",
+        "📑 التقارير وإدارة المستندات"
     ]
 
     if st.session_state["is_developer"]:
@@ -225,180 +223,302 @@ else:
         st.session_state["logged_in"] = False
         st.rerun()
 
-    # --- Pages ---
-    if page == "لوحة التحكم الرئيسية":
-        st.title("📊 لوحة التحكم والملخص العام")
+    # --- 1. Dashboard ---
+    if page == "📊 لوحة التحكم الرئيسية":
+        st.markdown("<h1 class='main-header'>📊 لوحة التحكم المتقدمة والملخص العام</h1>", unsafe_allow_html=True)
         
+        conn = sqlite3.connect("mh_group_erp.db")
+        prop_count = pd.read_sql_query("SELECT COUNT(*) as count FROM properties", conn)['count'][0]
+        emp_count = pd.read_sql_query("SELECT COUNT(*) as count FROM employees", conn)['count'][0]
+        total_inv = pd.read_sql_query("SELECT SUM(investment_amount) as sum FROM investors", conn)['sum'][0] or 0
+        open_tickets = pd.read_sql_query("SELECT COUNT(*) as count FROM it_tickets WHERE status != 'مغلق'", conn)['count'][0]
+        conn.close()
+
         c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.metric("إجمالي العقارات", "24 وحدة")
-        with c2:
-            st.metric("عدد الموظفين", "15 موظف")
-        with c3:
-            st.metric("إجمالي الاستثمارات", "12.5M EGP")
-        with c4:
-            st.metric("تذاكر الدعم الفني", "3 مفتوحة")
+        c1.metric("إجمالي العقارات المسجلة", f"{prop_count} وحدة")
+        c2.metric("إجمالي العمالة والموظفين", f"{emp_count} فرد")
+        c3.metric("حجم الاستثمارات", f"{total_inv:,.0f} EGP")
+        c4.metric("تذاكر الدعم المفتوحة", f"{open_tickets} تذكرة")
 
-        st.subheader("📈 الأداء المالي والبيانات")
-        df_dummy = pd.DataFrame({
-            "الشهر": ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو"],
-            "المبيعات": [1200000, 1500000, 1800000, 1400000, 2100000, 2500000],
-            "المصروفات": [400000, 450000, 500000, 480000, 520000, 600000]
-        })
-        st.line_chart(df_dummy.set_index("الشهر"))
-
-    elif page == "👥 إدارة المستخدمين والصلاحيات":
-        st.title("👥 إدارة حسابات المستخدمين والصلاحيات")
+        st.markdown("---")
+        st.subheader("📌 التفاصيل السريعة للأقسام")
+        col_a, col_b = st.columns(2)
         
-        tab1, tab2 = st.tabs(["➕ إضافة مستخدم جديد", "📋 قائمة المستخدمين الحاليين"])
+        with col_a:
+            st.markdown("### 👷 ملخص العمالة والموظفين")
+            conn = sqlite3.connect("mh_group_erp.db")
+            emp_summary = pd.read_sql_query("SELECT emp_type, COUNT(*) as العدد FROM employees GROUP BY emp_type", conn)
+            conn.close()
+            st.dataframe(emp_summary, use_container_width=True)
+
+        with col_b:
+            st.markdown("### 🏡 ملخص حالة العقارات")
+            conn = sqlite3.connect("mh_group_erp.db")
+            prop_summary = pd.read_sql_query("SELECT status as الحالة, COUNT(*) as العدد FROM properties GROUP BY status", conn)
+            conn.close()
+            st.dataframe(prop_summary, use_container_width=True)
+
+    # --- 2. Users Management ---
+    elif page == "👥 إدارة المستخدمين والصلاحيات":
+        st.title("👥 إدارة المستخدمين والحسابات")
+        tab1, tab2, tab3 = st.tabs(["➕ إضافة مستخدم", "📋 قائمة المستخدمين", "❌ حذف مستخدم"])
         
         with tab1:
             with st.form("add_user_form"):
-                new_username = st.text_input("اسم المستخدم الجديد")
-                new_password = st.text_input("كلمة المرور", type="password")
-                new_role = st.selectbox("الصلاحية / الدور", ["Admin", "Manager", "HR", "IT", "Accountant"])
-                submit_user = st.form_submit_button("إنشاء الحساب")
-                
-                if submit_user and new_username and new_password:
-                    conn = sqlite3.connect("mh_group_erp.db")
-                    cursor = conn.cursor()
-                    try:
-                        cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                                       (new_username, new_password, new_role))
-                        conn.commit()
-                        st.success(f"تم إنشاء حساب {new_username} بنجاح!")
-                    except sqlite3.IntegrityError:
-                        st.error("اسم المستخدم هذا موجود بالفعل، يرجى اختيار اسم آخر.")
-                    finally:
-                        conn.close()
+                u_name = st.text_input("اسم المستخدم")
+                u_pass = st.text_input("كلمة المرور", type="password")
+                u_role = st.selectbox("الصلاحية", ["Admin", "Manager", "HR", "IT", "Accountant"])
+                if st.form_submit_button("إضافة"):
+                    if u_name and u_pass:
+                        conn = sqlite3.connect("mh_group_erp.db")
+                        try:
+                            conn.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", (u_name, u_pass, u_role))
+                            conn.commit()
+                            st.success("تم إضافة المستخدم بنجاح")
+                        except:
+                            st.error("اسم المستخدم مسجل مسبقاً")
+                        finally:
+                            conn.close()
 
         with tab2:
             conn = sqlite3.connect("mh_group_erp.db")
-            users_df = pd.read_sql_query("SELECT id, username, role FROM users", conn)
+            st.dataframe(pd.read_sql_query("SELECT id, username, role FROM users", conn), use_container_width=True)
             conn.close()
-            st.dataframe(users_df, use_container_width=True)
 
-    elif page == "إدارة العقارات والوحدات":
+        with tab3:
+            conn = sqlite3.connect("mh_group_erp.db")
+            users_df = pd.read_sql_query("SELECT id, username FROM users WHERE username != 'admin'", conn)
+            conn.close()
+            if not users_df.empty:
+                del_user = st.selectbox("اختر المستخدم للحذف:", users_df["username"])
+                if st.button("حذف الحساب المحدد"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("DELETE FROM users WHERE username = ?", (del_user,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"تم حذف الحساب {del_user}")
+                    st.rerun()
+
+    # --- 3. Properties ---
+    elif page == "🏡 إدارة العقارات والوحدات":
         st.title("🏡 إدارة العقارات والوحدات")
-        with st.form("add_prop_form"):
-            name = st.text_input("اسم العقار / رقم الوحدة")
-            location = st.text_input("الموقع")
-            price = st.number_input("السعر", min_value=0.0, step=50000.0)
-            status = st.selectbox("الحالة", ["متاح", "تم البيع", "تحت الإنشاء", "محجوز"])
-            submitted = st.form_submit_button("إضافة العقار")
-            
-            if submitted and name:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO properties (name, location, price, status) VALUES (?, ?, ?, ?)",
-                               (name, location, price, status))
-                conn.commit()
-                conn.close()
-                st.success("تمت إضافة العقار بنجاح!")
+        tab1, tab2 = st.tabs(["➕ إضافة عقار", "❌ حذف عقار"])
+        
+        with tab1:
+            with st.form("add_prop"):
+                p_name = st.text_input("اسم العقار/الوحدة")
+                p_loc = st.text_input("الموقع")
+                p_price = st.number_input("السعر", min_value=0.0)
+                p_stat = st.selectbox("الحالة", ["متاح", "تم البيع", "تحت الإنشاء", "محجوز"])
+                if st.form_submit_button("حفظ"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("INSERT INTO properties (name, location, price, status) VALUES (?, ?, ?, ?)", (p_name, p_loc, p_price, p_stat))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم الحفظ")
+
+        with tab2:
+            conn = sqlite3.connect("mh_group_erp.db")
+            props_df = pd.read_sql_query("SELECT id, name FROM properties", conn)
+            conn.close()
+            if not props_df.empty:
+                del_id = st.selectbox("اختر العقار للحذف", props_df["id"], format_func=lambda x: props_df[props_df['id']==x]['name'].values[0])
+                if st.button("حذف العقار"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("DELETE FROM properties WHERE id = ?", (del_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم الحذف بنجاح")
+                    st.rerun()
 
         conn = sqlite3.connect("mh_group_erp.db")
-        props_df = pd.read_sql_query("SELECT * FROM properties", conn)
+        st.dataframe(pd.read_sql_query("SELECT * FROM properties", conn), use_container_width=True)
         conn.close()
-        st.dataframe(props_df, use_container_width=True)
 
-    elif page == "إدارة الموارد البشرية (HR)":
-        st.title("👥 إدارة الموارد البشرية والعمالة")
-        with st.form("add_emp_form"):
-            emp_name = st.text_input("اسم الموظف")
-            position = st.text_input("المسمى الوظيفي")
-            salary = st.number_input("الراتب", min_value=0.0, step=1000.0)
-            hire_date = st.date_input("تاريخ التعيين")
-            submitted_emp = st.form_submit_button("حفظ الموظف")
-            
-            if submitted_emp and emp_name:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO employees (name, position, salary, hire_date) VALUES (?, ?, ?, ?)",
-                               (emp_name, position, salary, str(hire_date)))
-                conn.commit()
-                conn.close()
-                st.success("تم تسجيل الموظف بنجاح!")
+    # --- 4. HR Section ---
+    elif page == "👷 إدارة الموارد البشرية والعمالة":
+        st.title("👷 إدارة العمالة والموظفين والموردين")
+        tab1, tab2 = st.tabs(["➕ إضافة موظف/عامل/مورد", "❌ حذف فرد"])
+        
+        with tab1:
+            with st.form("add_emp"):
+                e_name = st.text_input("الاسم")
+                e_type = st.selectbox("نوع الفئة", ["عامل", "مشرف", "مورد"])
+                e_pos = st.text_input("المسمى الوظيفي / مجال التوريد")
+                p_type = st.radio("نظام الحساب", ["بالساعة", "يومية أساسية"])
+                
+                c1, c2 = st.columns(2)
+                h_rate = c1.number_input("سعر الساعة", min_value=0.0)
+                h_worked = c2.number_input("عدد الساعات", min_value=0.0)
+                d_rate = st.number_input("سعر اليومية الأساسية", min_value=0.0)
+                
+                if st.form_submit_button("حفظ البيانات"):
+                    tot_pay = (h_rate * h_worked) if p_type == "بالساعة" else d_rate
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute('''INSERT INTO employees 
+                        (name, emp_type, position, pay_type, hourly_rate, hours_worked, daily_rate, total_pay, hire_date) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                        (e_name, e_type, e_pos, p_type, h_rate, h_worked, d_rate, tot_pay, str(datetime.date.today())))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"تم الحفظ! إجمالي المستحق: {tot_pay} EGP")
+
+        with tab2:
+            conn = sqlite3.connect("mh_group_erp.db")
+            emp_df = pd.read_sql_query("SELECT id, name FROM employees", conn)
+            conn.close()
+            if not emp_df.empty:
+                del_emp_id = st.selectbox("اختر الفرد للحذف", emp_df["id"], format_func=lambda x: emp_df[emp_df['id']==x]['name'].values[0])
+                if st.button("حذف البيانات"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("DELETE FROM employees WHERE id = ?", (del_emp_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم الحذف")
+                    st.rerun()
 
         conn = sqlite3.connect("mh_group_erp.db")
-        emp_df = pd.read_sql_query("SELECT * FROM employees", conn)
+        st.dataframe(pd.read_sql_query("SELECT * FROM employees", conn), use_container_width=True)
         conn.close()
-        st.dataframe(emp_df, use_container_width=True)
 
-    elif page == "قسم المستثمرين والمالية":
-        st.title("💼 قسم المستثمرين والمؤشرات المالية")
-        with st.form("add_investor_form"):
-            inv_name = st.text_input("اسم المستثمر")
-            inv_amount = st.number_input("مبلغ الاستثمار", min_value=0.0, step=100000.0)
-            inv_rate = st.number_input("نسبة العائد المتوقعة (%)", min_value=0.0, max_value=100.0, step=1.0)
-            start_d = st.date_input("تاريخ بداية الاستثمار")
-            submit_inv = st.form_submit_button("إضافة المستثمر")
-            
-            if submit_inv and inv_name:
-                conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO investors (name, investment_amount, return_rate, start_date) VALUES (?, ?, ?, ?)",
-                               (inv_name, inv_amount, inv_rate, str(start_d)))
-                conn.commit()
-                conn.close()
-                st.success("تم تسجيل المستثمر بنجاح!")
+    # --- 5. Investors ---
+    elif page == "💼 قسم المستثمرين والمالية":
+        st.title("💼 قسم المستثمرين والرسوم البيانية")
+        tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "❌ حذف مستثمر"])
+        
+        with tab1:
+            with st.form("add_inv"):
+                i_name = st.text_input("اسم المستثمر")
+                i_amount = st.number_input("مبلغ الاستثمار", min_value=0.0)
+                i_rate = st.number_input("نسبة العائد (%)", min_value=0.0)
+                if st.form_submit_button("تسجيل"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("INSERT INTO investors (name, investment_amount, return_rate, start_date) VALUES (?, ?, ?, ?)",
+                                 (i_name, i_amount, i_rate, str(datetime.date.today())))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم التسجيل")
 
+        with tab2:
+            conn = sqlite3.connect("mh_group_erp.db")
+            inv_df = pd.read_sql_query("SELECT id, name FROM investors", conn)
+            conn.close()
+            if not inv_df.empty:
+                del_inv_id = st.selectbox("اختر المستثمر للحذف", inv_df["id"], format_func=lambda x: inv_df[inv_df['id']==x]['name'].values[0])
+                if st.button("حذف المستثمر"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("DELETE FROM investors WHERE id = ?", (del_inv_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم الحذف")
+                    st.rerun()
+
+        st.subheader("📈 الرسوم التوضيحية للاستثمارات")
         conn = sqlite3.connect("mh_group_erp.db")
-        inv_df = pd.read_sql_query("SELECT * FROM investors", conn)
+        df_inv = pd.read_sql_query("SELECT name, investment_amount, return_rate FROM investors", conn)
         conn.close()
-        st.dataframe(inv_df, use_container_width=True)
+        
+        if not df_inv.empty:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("#### توزيع حجم الاستثمارات")
+                st.bar_chart(df_inv.set_index("name")["investment_amount"])
+            with c2:
+                st.markdown("#### نسبة العائد لكل مستثمر (%)")
+                st.line_chart(df_inv.set_index("name")["return_rate"])
+            st.dataframe(df_inv, use_container_width=True)
 
-    elif page == "قسم تقنية المعلومات (IT Support)":
+    # --- 6. IT Support ---
+    elif page == "💻 قسم تقنية المعلومات (IT Support)":
         st.title("💻 قسم تقنية المعلومات والدعم الفني")
-        with st.form("add_ticket_form"):
-            t_title = st.text_input("عنوان المشكلة")
-            t_cat = st.selectbox("التصنيف", ["شبكات وأنظمة", "برمجيات ERP", "أجهزة ومعدات", "صلاحيات مستخدمين"])
-            t_status = st.selectbox("الحالة", ["جديد", "قيد المعالجة", "مغلق"])
-            submit_t = st.form_submit_button("إرسال التذكرة")
+        tab1, tab2 = st.tabs(["➕ تذكرة جديدة", "❌ حذف تذكرة"])
+        
+        with tab1:
+            with st.form("add_t"):
+                t_title = st.text_input("عنوان المشكلة")
+                t_cat = st.selectbox("التصنيف", ["شبكات", "برمجيات", "أجهزة", "صلاحيات"])
+                t_stat = st.selectbox("الحالة", ["جديد", "قيد المعالجة", "مغلق"])
+                if st.form_submit_button("إرسال"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("INSERT INTO it_tickets (title, category, status, created_at) VALUES (?, ?, ?, ?)",
+                                 (t_title, t_cat, t_stat, str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم إرسال التذكرة")
+
+        with tab2:
+            conn = sqlite3.connect("mh_group_erp.db")
+            t_df = pd.read_sql_query("SELECT id, title FROM it_tickets", conn)
+            conn.close()
+            if not t_df.empty:
+                del_t_id = st.selectbox("اختر التذكرة للحذف", t_df["id"], format_func=lambda x: t_df[t_df['id']==x]['title'].values[0])
+                if st.button("حذف التذكرة"):
+                    conn = sqlite3.connect("mh_group_erp.db")
+                    conn.execute("DELETE FROM it_tickets WHERE id = ?", (del_t_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم الحذف")
+                    st.rerun()
+
+        conn = sqlite3.connect("mh_group_erp.db")
+        st.dataframe(pd.read_sql_query("SELECT * FROM it_tickets", conn), use_container_width=True)
+        conn.close()
+
+    # --- 7. Reports & Documents ---
+    elif page == "📑 التقارير وإدارة المستندات":
+        st.title("📑 التقارير ورفع المستندات")
+        
+        tab1, tab2 = st.tabs(["📤 رفع وأرشفة المستندات", "📊 استخراج التقارير"])
+        
+        with tab1:
+            st.subheader("📤 رفع مستند جديد إلى النظام")
+            doc_cat = st.selectbox("تصنيف المستند", ["عقود عمالة", "عقود مستثمرين", "أوراق عقارات", "فواتير ومستندات طوارئ"])
+            uploaded_file = st.file_uploader("اختر الملف لرفعه", type=["pdf", "docx", "png", "jpg", "xlsx"])
             
-            if submit_t and t_title:
+            if uploaded_file and st.button("حفظ المستند"):
                 conn = sqlite3.connect("mh_group_erp.db")
-                cursor = conn.cursor()
-                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                cursor.execute("INSERT INTO it_tickets (title, category, status, created_at) VALUES (?, ?, ?, ?)",
-                               (t_title, t_cat, t_status, now_str))
+                conn.execute("INSERT INTO documents (file_name, category, upload_date) VALUES (?, ?, ?)",
+                             (uploaded_file.name, doc_cat, str(datetime.date.today())))
                 conn.commit()
                 conn.close()
-                st.success("تم إرسال تذكرة الدعم بنجاح!")
+                st.success(f"تم رفع المستند '{uploaded_file.name}' وأرشفته بنجاح!")
 
-        conn = sqlite3.connect("mh_group_erp.db")
-        it_df = pd.read_sql_query("SELECT * FROM it_tickets", conn)
-        conn.close()
-        st.dataframe(it_df, use_container_width=True)
+            st.markdown("---")
+            st.subheader("📂 الأرشيف الحالي للمستندات")
+            conn = sqlite3.connect("mh_group_erp.db")
+            docs_df = pd.read_sql_query("SELECT * FROM documents", conn)
+            conn.close()
+            st.dataframe(docs_df, use_container_width=True)
 
-    elif page == "التقارير والمستندات":
-        st.title("📑 التقارير والطباعة")
-        report_type = st.selectbox("اختر نوع التقرير", ["تقرير العقارات", "تقرير الموظفين", "تقرير المستثمرين", "تقرير المستخدمين"])
-        
-        conn = sqlite3.connect("mh_group_erp.db")
-        if report_type == "تقرير العقارات":
-            rep_df = pd.read_sql_query("SELECT * FROM properties", conn)
-        elif report_type == "تقرير الموظفين":
-            rep_df = pd.read_sql_query("SELECT * FROM employees", conn)
-        elif report_type == "تقرير المستثمرين":
-            rep_df = pd.read_sql_query("SELECT * FROM investors", conn)
-        else:
-            rep_df = pd.read_sql_query("SELECT id, username, role FROM users", conn)
-        conn.close()
-        
-        st.dataframe(rep_df, use_container_width=True)
+        with tab2:
+            st.subheader("📊 استخراج التقرير الشامل")
+            rep_type = st.selectbox("اختر نوع التقرير", ["عقارات", "موظفين وعمالة", "مستثمرين", "دعم IT"])
+            conn = sqlite3.connect("mh_group_erp.db")
+            
+            if rep_type == "عقارات":
+                df = pd.read_sql_query("SELECT * FROM properties", conn)
+            elif rep_type == "موظفين وعمالة":
+                df = pd.read_sql_query("SELECT * FROM employees", conn)
+            elif rep_type == "مستثمرين":
+                df = pd.read_sql_query("SELECT * FROM investors", conn)
+            else:
+                df = pd.read_sql_query("SELECT * FROM it_tickets", conn)
+            conn.close()
+            
+            st.dataframe(df, use_container_width=True)
+            st.download_button("📥 تحميل التقرير بصيغة CSV", data=df.to_csv(index=False).encode('utf-8'), file_name=f"{rep_type}.csv")
 
-    # --- Developer Section ---
+    # --- Developer & Themes ---
     elif page == "⚙️ إعدادات المطور والثيمات":
-        st.title("⚙️ قسم المطور والتحكم بالثيمات")
-        st.subheader("🎨 اختيارات الثيمات المحدثة")
-        
+        st.title("⚙️ إعدادات المطور والثيمات")
         selected_theme_name = st.selectbox(
-            "اختر ثيم لوحة التحكم الجديدة:",
+            "اختر ثيم لوحة التحكم (سيتم حفظه حتى بعد الـ Refresh):",
             list(THEMES.keys()),
             index=list(THEMES.keys()).index(st.session_state["selected_theme"])
         )
         
         if selected_theme_name != st.session_state["selected_theme"]:
             st.session_state["selected_theme"] = selected_theme_name
-            st.success(f"تم تطبيق الثيم: {selected_theme_name}")
+            st.query_params["theme"] = selected_theme_name
+            st.success(f"تم تطبيق وحفظ ثيم: {selected_theme_name}")
             st.rerun()
