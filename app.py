@@ -1,4 +1,6 @@
+import base64
 import datetime
+import io
 import sqlite3
 import pandas as pd
 import streamlit as st
@@ -169,10 +171,12 @@ def init_db():
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT, emp_type TEXT, position TEXT, pay_type TEXT,
-                hourly_rate REAL, hours_worked REAL, daily_rate REAL, total_pay REAL, hire_date TEXT
+                hourly_rate REAL, hours_worked REAL, daily_rate REAL, total_pay REAL, hire_date TEXT,
+                workers_count INTEGER DEFAULT 1, craft_type TEXT
             )
         """)
 
+    # Auto Migration for Employees Table
     cursor.execute("PRAGMA table_info(employees)")
     columns = [col[1] for col in cursor.fetchall()]
     new_cols = {
@@ -182,6 +186,8 @@ def init_db():
         "hours_worked": "REAL",
         "daily_rate": "REAL",
         "total_pay": "REAL",
+        "workers_count": "INTEGER DEFAULT 1",
+        "craft_type": "TEXT",
     }
     for col_name, col_type in new_cols.items():
       if col_name not in columns:
@@ -206,9 +212,19 @@ def init_db():
     cursor.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_name TEXT, category TEXT, upload_date TEXT
+                file_name TEXT, category TEXT, upload_date TEXT,
+                file_data BLOB, file_type TEXT
             )
         """)
+
+    # Auto Migration for Documents Table
+    cursor.execute("PRAGMA table_info(documents)")
+    doc_cols = [col[1] for col in cursor.fetchall()]
+    if "file_data" not in doc_cols:
+      cursor.execute("ALTER TABLE documents ADD COLUMN file_data BLOB")
+    if "file_type" not in doc_cols:
+      cursor.execute("ALTER TABLE documents ADD COLUMN file_type TEXT")
+
     conn.commit()
 
 
@@ -288,7 +304,6 @@ else:
   # 🔐 Role-Based Navigation Routing
   current_role = st.session_state["user_role"]
 
-  # Base Options Available to Everyone
   menu_options = ["👤 الملف الشخصي (Profile)"]
 
   if current_role == "Admin":
@@ -589,17 +604,45 @@ else:
         safe_read_sql("SELECT * FROM properties"), use_container_width=True
     )
 
-  # --- 5. HR Section ---
+  # --- 5. HR Section (Updated for Workers & Crafts) ---
   elif page == "👷 إدارة الموارد البشرية والعمالة":
     st.title("👷 إدارة العمالة والموظفين والموردين")
-    tab1, tab2 = st.tabs(["➕ إضافة موظف/عامل/مورد", "❌ حذف فرد"])
+    tab1, tab2 = st.tabs(["➕ إضافة موظف / مورد عمالة", "❌ حذف فرد"])
 
     with tab1:
-      with st.form("add_emp"):
-        e_name = st.text_input("الاسم")
-        e_type = st.selectbox("نوع الفئة", ["عامل", "مشرف", "مورد"])
-        e_pos = st.text_input("المسمى الوظيفي / مجال التوريد")
-        p_type = st.radio("نظام الحساب", ["بالساعة", "يومية أساسية"])
+      e_type = st.selectbox(
+          "نوع الفئة المراد تسجيلها:", ["عامل", "مشرف", "مورد عمالة / مقاول"]
+      )
+
+      with st.form("add_emp_form"):
+        e_name = st.text_input("اسم الفرد / اسم توريد المقاول")
+        e_pos = st.text_input("المسمى الوظيفي / اسم الشركة أو المقاولة")
+
+        # Dynamic Options for Suppliers/Contractors
+        w_count = 1
+        c_type = "عامل عادي"
+
+        if e_type == "مورد عمالة / مقاول":
+          st.markdown("#### 🛠️ تفاصيل العمالة الموردة:")
+          col_w1, col_w2 = st.columns(2)
+          w_count = col_w1.number_input(
+              "عدد العمالة الموردة:", min_value=1, value=1, step=1
+          )
+          c_type = col_w2.selectbox(
+              "نوع تخصص العمالة:",
+              [
+                  "نحات",
+                  "مبيض محارة",
+                  "عامل عادي",
+                  "بناء",
+                  "سباك",
+                  "كهربائي",
+                  "نقاش",
+                  "حداد / نجار مسلح",
+              ],
+          )
+
+        p_type = st.radio("نظام الحساب والماليات:", ["بالساعة", "يومية أساسية"])
 
         c1, c2 = st.columns(2)
         h_rate = c1.number_input("سعر الساعة", min_value=0.0)
@@ -611,8 +654,8 @@ else:
           with sqlite3.connect("mh_group_erp.db") as conn:
             conn.execute(
                 """INSERT INTO employees 
-                (name, emp_type, position, pay_type, hourly_rate, hours_worked, daily_rate, total_pay, hire_date) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (name, emp_type, position, pay_type, hourly_rate, hours_worked, daily_rate, total_pay, hire_date, workers_count, craft_type) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     e_name,
                     e_type,
@@ -623,10 +666,12 @@ else:
                     d_rate,
                     tot_pay,
                     str(datetime.date.today()),
+                    w_count,
+                    c_type,
                 ),
             )
             conn.commit()
-          st.success(f"تم الحفظ! إجمالي المستحق: {tot_pay} EGP")
+          st.success(f"تم الحفظ بنجاح! إجمالي المستحق: {tot_pay} EGP")
 
     with tab2:
       emp_df = safe_read_sql("SELECT id, name FROM employees")
@@ -640,11 +685,17 @@ else:
           with sqlite3.connect("mh_group_erp.db") as conn:
             conn.execute("DELETE FROM employees WHERE id = ?", (del_emp_id,))
             conn.commit()
-          st.success("تم الحذف")
+          st.success("تم الحذف بنجاح")
           st.rerun()
 
+    st.markdown("### 📋 سجل الموظفين والعمالة والموردين")
     st.dataframe(
-        safe_read_sql("SELECT * FROM employees"), use_container_width=True
+        safe_read_sql(
+            "SELECT id, name AS الاسم, emp_type AS الفئة, position AS الوظيفة,"
+            " craft_type AS التخصص, workers_count AS عدد_العمالة, total_pay AS"
+            " المستحق_المالي, hire_date AS التاريخ FROM employees"
+        ),
+        use_container_width=True,
     )
 
   # --- 6. Investors ---
@@ -743,13 +794,18 @@ else:
         safe_read_sql("SELECT * FROM it_tickets"), use_container_width=True
     )
 
-  # --- 8. Reports & Documents ---
+  # --- 8. Reports & Documents (Admin Preview Integrated) ---
   elif page == "📑 التقارير وإدارة المستندات":
-    st.title("📑 التقارير ورفع المستندات")
+    st.title("📑 التقارير ورفع الأرشيف والمستندات")
 
-    tab1, tab2 = st.tabs(["📤 رفع وأرشفة المستندات", "📊 استخراج التقارير"])
+    tabs_list = ["📤 رفع وأرشفة المستندات", "📊 استخراج التقارير"]
+    if current_role == "Admin":
+      tabs_list.insert(1, "👁️ معاينة المستندات والأرشيف (خاص بالآدمن)")
 
-    with tab1:
+    doc_tabs = st.tabs(tabs_list)
+
+    # Tab 1: Uploading
+    with doc_tabs[0]:
       st.subheader("📤 رفع مستند جديد إلى النظام")
       doc_cat = st.selectbox(
           "تصنيف المستند",
@@ -761,15 +817,24 @@ else:
           ],
       )
       uploaded_file = st.file_uploader(
-          "اختر الملف لرفعه", type=["pdf", "docx", "png", "jpg", "xlsx"]
+          "اختر الملف لرفعه", type=["pdf", "docx", "png", "jpg", "xlsx", "txt"]
       )
 
-      if uploaded_file and st.button("حفظ المستند"):
+      if uploaded_file and st.button("حفظ المستند بالمؤرشف"):
+        file_bytes = uploaded_file.getvalue()
+        file_type = uploaded_file.type
+
         with sqlite3.connect("mh_group_erp.db") as conn:
           conn.execute(
-              "INSERT INTO documents (file_name, category, upload_date) VALUES"
-              " (?, ?, ?)",
-              (uploaded_file.name, doc_cat, str(datetime.date.today())),
+              "INSERT INTO documents (file_name, category, upload_date,"
+              " file_data, file_type) VALUES (?, ?, ?, ?, ?)",
+              (
+                  uploaded_file.name,
+                  doc_cat,
+                  str(datetime.date.today()),
+                  file_bytes,
+                  file_type,
+              ),
           )
           conn.commit()
         st.success(
@@ -778,10 +843,70 @@ else:
 
       st.markdown("---")
       st.subheader("📂 الأرشيف الحالي للمستندات")
-      docs_df = safe_read_sql("SELECT * FROM documents")
+      docs_df = safe_read_sql(
+          "SELECT id, file_name, category, upload_date FROM documents"
+      )
       st.dataframe(docs_df, use_container_width=True)
 
-    with tab2:
+    # Tab 2: Admin Preview ONLY
+    if current_role == "Admin":
+      with doc_tabs[1]:
+        st.subheader("👁️ معاينة وتحميل المستندات المؤرشفة (خاص بالأدمن)")
+
+        with sqlite3.connect("mh_group_erp.db") as conn:
+          cursor = conn.cursor()
+          cursor.execute(
+              "SELECT id, file_name, category, upload_date, file_data,"
+              " file_type FROM documents"
+          )
+          all_docs = cursor.fetchall()
+
+        if all_docs:
+          doc_dict = {
+              f"[{doc[0]}] {doc[1]} - ({doc[2]})": doc for doc in all_docs
+          }
+          selected_doc_key = st.selectbox("اختر المستند للمعاينة:", list(doc_dict.keys()))
+          doc_data = doc_dict[selected_doc_key]
+
+          d_id, d_name, d_cat, d_date, d_bytes, d_type = doc_data
+
+          st.write(f"**اسم الملف:** {d_name}")
+          st.write(f"**التصنيف:** {d_cat}")
+          st.write(f"**تاريخ الرفع:** {d_date}")
+
+          if d_bytes:
+            # Image Preview
+            if d_type and "image" in d_type:
+              st.image(
+                  d_bytes, caption=d_name, use_container_width=True
+              )
+            # Text Preview
+            elif d_type and "text" in d_type:
+              st.text_area(
+                  "محتوى الملف:",
+                  d_bytes.decode("utf-8", errors="ignore"),
+                  height=200,
+              )
+            else:
+              st.info(
+                  "لا تتوفر معاينة صوَرية مباشرة لهذا النوع من الملفات (PDF/Word/Excel)."
+              )
+
+            # Direct Download Button
+            st.download_button(
+                label=f"⬇️ تحميل الملف ({d_name})",
+                data=d_bytes,
+                file_name=d_name,
+                mime=d_type if d_type else "application/octet-stream",
+            )
+          else:
+            st.warning("الملف القديم لا يحتوي على بيانات باينري للمعاينة.")
+        else:
+          st.info("لا توجد مستندات مرفوعة في النظام حالياً.")
+
+    # Tab 3: Reports
+    report_tab_index = 2 if current_role == "Admin" else 1
+    with doc_tabs[report_tab_index]:
       st.subheader("📊 استخراج التقرير الشامل")
       rep_type = st.selectbox(
           "اختر نوع التقرير",
@@ -791,7 +916,10 @@ else:
       if rep_type == "عقارات":
         df = safe_read_sql("SELECT * FROM properties")
       elif rep_type == "موظفين وعمالة":
-        df = safe_read_sql("SELECT * FROM employees")
+        df = safe_read_sql(
+            "SELECT id, name, emp_type, position, craft_type, workers_count,"
+            " total_pay, hire_date FROM employees"
+        )
       elif rep_type == "مستثمرين":
         df = safe_read_sql("SELECT * FROM investors")
       else:
