@@ -250,6 +250,7 @@ else:
 
   menu_options = [
       "📊 لوحة التحكم الرئيسية",
+      "👤 الملف الشخصي (Profile)",
       "👥 إدارة المستخدمين والصلاحيات",
       "🏡 إدارة العقارات والوحدات",
       "👷 إدارة الموارد البشرية والعمالة",
@@ -320,7 +321,68 @@ else:
       )
       st.dataframe(prop_summary, use_container_width=True)
 
-  # --- 2. Users Management ---
+  # --- 2. Profile Section ---
+  elif page == "👤 الملف الشخصي (Profile)":
+    st.title("👤 إدارة الملف الشخصي والحساب")
+
+    col_prof1, col_prof2 = st.columns([1, 2])
+
+    with col_prof1:
+      st.markdown("### 📋 بيانات الحساب")
+      st.info(f"**اسم المستخدم:** {st.session_state['username']}")
+      st.info(f"**الصلاحية:** {st.session_state['user_role']}")
+      st.info(
+          f"**تاريخ الجلسة:** {datetime.datetime.now().strftime('%Y-%m-%d')}"
+      )
+
+    with col_prof2:
+      st.markdown("### 🔐 تغيير كلمة المرور")
+      with st.form("change_pass_form"):
+        old_pass = st.text_input("كلمة المرور الحالية", type="password")
+        new_pass = st.text_input("كلمة المرور الجديدة", type="password")
+        confirm_pass = st.text_input(
+            "تأكيد كلمة المرور الجديدة", type="password"
+        )
+
+        if st.form_submit_button("تحديث كلمة المرور"):
+          if not old_pass or not new_pass or not confirm_pass:
+            st.error("يرجى إدخال جميع الحقول!")
+          elif new_pass != confirm_pass:
+            st.error("كلمتا المرور غير متطابقتين!")
+          else:
+            with sqlite3.connect("mh_group_erp.db") as conn:
+              cursor = conn.cursor()
+              cursor.execute(
+                  "SELECT password FROM users WHERE username = ?",
+                  (st.session_state["username"],),
+              )
+              user_row = cursor.fetchone()
+
+              if user_row and user_row[0] == old_pass:
+                cursor.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (new_pass, st.session_state["username"]),
+                )
+                conn.commit()
+                st.success("تم تحديث كلمة المرور بنجاح!")
+              else:
+                st.error("كلمة المرور الحالية غير صحيحة!")
+
+    st.markdown("---")
+    st.markdown("### 🎨 الثيم الشخصي المفضل")
+    selected_theme_profile = st.selectbox(
+        "اختر الثيم المفضل لحسابك:",
+        list(THEMES.keys()),
+        index=list(THEMES.keys()).index(st.session_state["selected_theme"]),
+    )
+
+    if selected_theme_profile != st.session_state["selected_theme"]:
+      st.session_state["selected_theme"] = selected_theme_profile
+      st.query_params["theme"] = selected_theme_profile
+      st.success(f"تم حفظ وتطبيق ثيم: {selected_theme_profile}")
+      st.rerun()
+
+  # --- 3. Users Management ---
   elif page == "👥 إدارة المستخدمين والصلاحيات":
     st.title("👥 إدارة المستخدمين والحسابات")
     tab1, tab2, tab3 = st.tabs(
@@ -367,7 +429,7 @@ else:
           st.success(f"تم حذف الحساب {del_user}")
           st.rerun()
 
-  # --- 3. Properties ---
+  # --- 4. Properties ---
   elif page == "🏡 إدارة العقارات والوحدات":
     st.title("🏡 إدارة العقارات والوحدات")
     tab1, tab2 = st.tabs(["➕ إضافة عقار", "❌ حذف عقار"])
@@ -411,7 +473,7 @@ else:
         safe_read_sql("SELECT * FROM properties"), use_container_width=True
     )
 
-  # --- 4. HR Section ---
+  # --- 5. HR Section ---
   elif page == "👷 إدارة الموارد البشرية والعمالة":
     st.title("👷 إدارة العمالة والموظفين والموردين")
     tab1, tab2 = st.tabs(["➕ إضافة موظف/عامل/مورد", "❌ حذف فرد"])
@@ -469,7 +531,7 @@ else:
         safe_read_sql("SELECT * FROM employees"), use_container_width=True
     )
 
-  # --- 5. Investors ---
+  # --- 6. Investors ---
   elif page == "💼 قسم المستثمرين والمالية":
     st.title("💼 قسم المستثمرين والرسوم البيانية")
     tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "❌ حذف مستثمر"])
@@ -519,7 +581,7 @@ else:
         st.line_chart(df_inv.set_index("name")["return_rate"])
       st.dataframe(df_inv, use_container_width=True)
 
-  # --- 6. IT Support ---
+  # --- 7. IT Support ---
   elif page == "💻 قسم تقنية المعلومات (IT Support)":
     st.title("💻 قسم تقنية المعلومات والدعم الفني")
     tab1, tab2 = st.tabs(["➕ تذكرة جديدة", "❌ حذف تذكرة"])
@@ -565,7 +627,7 @@ else:
         safe_read_sql("SELECT * FROM it_tickets"), use_container_width=True
     )
 
-  # --- 7. Reports & Documents ---
+  # --- 8. Reports & Documents ---
   elif page == "📑 التقارير وإدارة المستندات":
     st.title("📑 التقارير ورفع المستندات")
 
