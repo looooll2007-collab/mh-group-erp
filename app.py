@@ -580,8 +580,12 @@ else:
                 selected_user_edit = st.selectbox("اختر المستخدم للتعديل:", users_list_df["username"])
                 u_row = users_list_df[users_list_df["username"] == selected_user_edit].iloc[0]
 
+                role_options = ["Admin", "Manager", "HR", "IT", "Accountant"]
+                current_user_role = str(u_row["role"]).strip()
+                default_role_index = role_options.index(current_user_role) if current_user_role in role_options else 0
+
                 with st.form("edit_user_admin_form"):
-                    e_role = st.selectbox("الصلاحية الجديدة:", ["Admin", "Manager", "HR", "IT", "Accountant"], index=["Admin", "Manager", "HR", "IT", "Accountant"].index(u_row["role"]))
+                    e_role = st.selectbox("الصلاحية الجديدة:", role_options, index=default_role_index)
                     e_phone = st.text_input("رقم الهاتف:", value=str(u_row["phone"] or ""))
                     e_pass = st.text_input("كلمة مرور جديدة (اتركها فارغة للتجاهل):", type="password")
 
