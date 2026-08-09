@@ -4,7 +4,7 @@ import random
 import string
 
 # ==========================================
-# 1. إعداد وإصلاح قاعدة البيانات (Database Setup)
+# 1. إعداد قاعدة البيانات (Database Setup)
 # ==========================================
 def get_db_connection():
     conn = sqlite3.connect("mh_group.db")
@@ -52,7 +52,7 @@ def init_db():
         )
     ''')
     
-    # جدول إعدادات اللوحة الرئيسية (خاص بجهة المطور)
+    # جدول إعدادات اللوحة الرئيسية (إعدادات المطور)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS system_settings (
             key TEXT PRIMARY KEY,
@@ -60,13 +60,13 @@ def init_db():
         )
     ''')
 
-    # إضافة حساب المطور الافتراضي إذا لم يكن موجوداً
+    # إضافة حساب المطور الافتراضي
     cursor.execute("SELECT * FROM users WHERE username = 'developer'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
                        ('developer', 'admin123', 'المطور', '01000000000'))
 
-    # إضافة حساب المدير (Admin) الافتراضي إذا لم يكن موجوداً
+    # إضافة حساب المدير الافتراضي
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
@@ -85,7 +85,7 @@ def send_sms_otp(phone, code):
     return True
 
 # ==========================================
-# 3. واجهة المستخدم والتنقل
+# 3. واجهة المستخدم والتنقل بين الأقسام
 # ==========================================
 st.set_page_config(page_title="MH GROUP - نظام الإدارة", layout="wide")
 
@@ -94,12 +94,12 @@ if "logged_in" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 if "reset_stage" not in st.session_state:
-    st.session_state.reset_stage = "request" # request, verify, change
+    st.session_state.reset_stage = "request"
 
 st.title("🏢 نظام MH GROUP للاستثمار والتطوير العقاري")
 
 # ------------------------------------------
-# نظام تسجيل الدخول واستعادة كلمة السر
+# تسجيل الدخول واستعادة كلمة السر
 # ------------------------------------------
 if not st.session_state.logged_in:
     tab1, tab2 = st.tabs(["تسجيل الدخول", "نسيت كلمة السر؟"])
@@ -114,7 +114,6 @@ if not st.session_state.logged_in:
             conn.close()
             if user:
                 st.session_state.logged_in = True
-                # تحويل صف SQLite إلى dict صريح لتفادي خطأ TypeError
                 st.session_state.user = dict(user)
                 st.success("تم تسجيل الدخول بنجاح!")
                 st.rerun()
@@ -123,7 +122,6 @@ if not st.session_state.logged_in:
 
     with tab2:
         st.subheader("📲 استعادة كلمة السر عبر SMS")
-        
         if st.session_state.reset_stage == "request":
             reset_username = st.text_input("أدخل اسم المستخدم للتحقق", key="reset_user")
             if st.button("إرسال كود التحقق"):
@@ -185,7 +183,7 @@ if not st.session_state.logged_in:
 
 else:
     # ------------------------------------------
-    # القائمة الجانبية والصلاحيات
+    # القائمة الجانبية وعرض الأقسام بناءً على الصلاحية
     # ------------------------------------------
     current_user = st.session_state.user if isinstance(st.session_state.user, dict) else dict(st.session_state.user)
     u_name = current_user.get('username', '')
@@ -198,19 +196,20 @@ else:
         st.session_state.user = None
         st.rerun()
 
+    # بناء قائمة الأقسام
     menu = ["اللوحة الرئيسية", "قسم العقارات", "قسم المستثمرين"]
     
-    # قسم المطور وإدارة المستخدمين تظهر فقط للمطور أو المديرين حسب الصلاحيات
+    # إضافة الأقسام الخاصة حسب نوع الحساب
     if u_role == "المطور":
         menu.append("💻 قسم المطور (الإعدادات)")
         menu.append("👥 إدارة المستخدمين والصلاحيات")
     elif u_role == "مدير":
         menu.append("👥 إدارة المستخدمين والصلاحيات")
 
-    choice = st.sidebar.selectbox("الانتقال إلى", menu)
+    choice = st.sidebar.selectbox("الانتقال إلى القسم", menu)
 
     # ------------------------------------------
-    # 1. اللوحة الرئيسية
+    # 1. قسم اللوحة الرئيسية
     # ------------------------------------------
     if choice == "اللوحة الرئيسية":
         conn = get_db_connection()
@@ -322,7 +321,7 @@ else:
             st.info("لا يوجد مستثمرون مسجلون حالياً.")
 
     # ------------------------------------------
-    # 4. قسم المطور (خاص بالمطور فقط)
+    # 4. قسم المطور (خاص بحساب المطور فقط)
     # ------------------------------------------
     elif choice == "💻 قسم المطور (الإعدادات)":
         st.header("💻 لوحة تحكم المطور")
@@ -343,7 +342,7 @@ else:
             st.success("تم تحديث إعدادات اللوحة الرئيسية بنجاح!")
 
     # ------------------------------------------
-    # 5. إدارة المستخدمين والصلاحيات
+    # 5. قسم إدارة المستخدمين والصلاحيات
     # ------------------------------------------
     elif choice == "👥 إدارة المستخدمين والصلاحيات":
         st.header("👥 إدارة المستخدمين والصلاحيات")
