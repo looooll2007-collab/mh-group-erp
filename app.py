@@ -4,7 +4,7 @@ import random
 import string
 
 # ==========================================
-# 1. إعداد قاعدة البيانات (Database Setup)
+# 1. إعداد وإصلاح قاعدة البيانات (Database Setup)
 # ==========================================
 def get_db_connection():
     conn = sqlite3.connect("mh_group.db")
@@ -15,7 +15,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # جدول المستخدمين
+    # جدول المستخدمين (يحتوي على رقم الهاتف وكود إعادة التعيين)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +27,7 @@ def init_db():
         )
     ''')
     
-    # جدول العقارات
+    # جدول العقارات (شامل التفاصيل والمصاريف)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +52,7 @@ def init_db():
         )
     ''')
     
-    # جدول إعدادات اللوحة الرئيسية (إعدادات المطور)
+    # جدول إعدادات اللوحة الرئيسية (خاص بحساب المطور)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS system_settings (
             key TEXT PRIMARY KEY,
@@ -66,7 +66,7 @@ def init_db():
         cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
                        ('developer', 'admin123', 'المطور', '01000000000'))
 
-    # إضافة حساب المدير الافتراضي
+    # إضافة حساب المدير (Admin) الافتراضي
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
@@ -78,14 +78,14 @@ def init_db():
 init_db()
 
 # ==========================================
-# 2. وظائف إرسال SMS واختبار الرموز
+# 2. وظيفة محاكاة إرسال SMS
 # ==========================================
 def send_sms_otp(phone, code):
     st.info(f"📱 [محاكاة SMS] تم إرسال كود التحقق ({code}) إلى الرقم: {phone}")
     return True
 
 # ==========================================
-# 3. واجهة المستخدم والتنقل بين الأقسام
+# 3. واجهة التطبيق الرئيسية
 # ==========================================
 st.set_page_config(page_title="MH GROUP - نظام الإدارة", layout="wide")
 
@@ -94,18 +94,18 @@ if "logged_in" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 if "reset_stage" not in st.session_state:
-    st.session_state.reset_stage = "request"
+    st.session_state.reset_stage = "request" # request, verify, change
 
 st.title("🏢 نظام MH GROUP للاستثمار والتطوير العقاري")
 
 # ------------------------------------------
-# تسجيل الدخول واستعادة كلمة السر
+# نظام تسجيل الدخول واستعادة كلمة السر
 # ------------------------------------------
 if not st.session_state.logged_in:
-    tab1, tab2 = st.tabs(["تسجيل الدخول", "نسيت كلمة السر؟"])
+    tab1, tab2 = st.tabs(["🔑 تسجيل الدخول", "📲 نسيت كلمة السر؟"])
     
     with tab1:
-        st.subheader("🔑 تسجيل الدخول")
+        st.subheader("تسجيل الدخول")
         username = st.text_input("اسم المستخدم")
         password = st.text_input("كلمة السر", type="password")
         if st.button("دخول"):
@@ -121,7 +121,9 @@ if not st.session_state.logged_in:
                 st.error("اسم المستخدم أو كلمة السر غير صحيحة.")
 
     with tab2:
-        st.subheader("📲 استعادة كلمة السر عبر SMS")
+        st.subheader("استعادة كلمة السر عبر SMS")
+        
+        # المرحلة الأولى: طلب اسم المستخدم وإرسال الكود
         if st.session_state.reset_stage == "request":
             reset_username = st.text_input("أدخل اسم المستخدم للتحقق", key="reset_user")
             if st.button("إرسال كود التحقق"):
@@ -146,6 +148,7 @@ if not st.session_state.logged_in:
                     conn.close()
                     st.error("المستخدم غير موجود!")
 
+        # المرحلة الثانية: أدخال كود SMS والتحقق منه
         elif st.session_state.reset_stage == "verify":
             st.info(f"تم إرسال كود التحقق للمستخدم: {st.session_state.get('reset_target_user')}")
             input_code = st.text_input("أدخل الكود المكون من 6 أرقام", max_chars=6)
@@ -164,6 +167,7 @@ if not st.session_state.logged_in:
                     else:
                         st.error("❌ الكود غير صحيح! يرجى التأكد وإعادة المحاولة.")
 
+        # المرحلة الثالثة: تعيين كلمة سر جديدة
         elif st.session_state.reset_stage == "change":
             st.subheader("🔒 تعيين كلمة سر جديدة")
             new_pass = st.text_input("كلمة السر الجديدة", type="password")
@@ -183,7 +187,7 @@ if not st.session_state.logged_in:
 
 else:
     # ------------------------------------------
-    # القائمة الجانبية وعرض الأقسام بناءً على الصلاحية
+    # القائمة الجانبية وإدارة التنقل والأقسام
     # ------------------------------------------
     current_user = st.session_state.user if isinstance(st.session_state.user, dict) else dict(st.session_state.user)
     u_name = current_user.get('username', '')
@@ -196,10 +200,9 @@ else:
         st.session_state.user = None
         st.rerun()
 
-    # بناء قائمة الأقسام
     menu = ["اللوحة الرئيسية", "قسم العقارات", "قسم المستثمرين"]
     
-    # إضافة الأقسام الخاصة حسب نوع الحساب
+    # تحديد الأقسام المتاحة بناءً على الصلاحيات
     if u_role == "المطور":
         menu.append("💻 قسم المطور (الإعدادات)")
         menu.append("👥 إدارة المستخدمين والصلاحيات")
@@ -209,7 +212,7 @@ else:
     choice = st.sidebar.selectbox("الانتقال إلى القسم", menu)
 
     # ------------------------------------------
-    # 1. قسم اللوحة الرئيسية
+    # 1. اللوحة الرئيسية
     # ------------------------------------------
     if choice == "اللوحة الرئيسية":
         conn = get_db_connection()
@@ -321,7 +324,7 @@ else:
             st.info("لا يوجد مستثمرون مسجلون حالياً.")
 
     # ------------------------------------------
-    # 4. قسم المطور (خاص بحساب المطور فقط)
+    # 4. قسم المطور (خاص بالمطور فقط)
     # ------------------------------------------
     elif choice == "💻 قسم المطور (الإعدادات)":
         st.header("💻 لوحة تحكم المطور")
@@ -342,12 +345,14 @@ else:
             st.success("تم تحديث إعدادات اللوحة الرئيسية بنجاح!")
 
     # ------------------------------------------
-    # 5. قسم إدارة المستخدمين والصلاحيات
+    # 5. إدارة المستخدمين والصلاحيات (إضافة + حذف)
     # ------------------------------------------
     elif choice == "👥 إدارة المستخدمين والصلاحيات":
         st.header("👥 إدارة المستخدمين والصلاحيات")
         
-        with st.expander("➕ إضافة مستخدم جديد"):
+        tab_add, tab_delete = st.tabs(["➕ إضافة مستخدم", "🗑️ حذف مستخدم"])
+        
+        with tab_add:
             with st.form("add_user_form"):
                 u_name = st.text_input("اسم المستخدم")
                 u_pass = st.text_input("كلمة السر", type="password")
@@ -368,9 +373,30 @@ else:
                         except sqlite3.IntegrityError:
                             st.error("اسم المستخدم موجود بالفعل!")
                     else:
-                        st.warning("يرجى ملء جميع الحقول المطلوبة بما فيها رقم الهاتف!")
+                        st.warning("يرجى ملء جميع الحقول المطلوب بما فيها رقم الهاتف!")
 
-        st.subheader("📜 قائمة المستخدمين")
+        with tab_delete:
+            conn = get_db_connection()
+            all_users = conn.execute("SELECT id, username, role FROM users").fetchall()
+            conn.close()
+            
+            user_options = {f"{u['username']} ({u['role']})": u['id'] for u in all_users if u['username'] != u_name}
+            
+            if user_options:
+                selected_user = st.selectbox("اختر المستخدم المراد حذفه", list(user_options.keys()))
+                if st.button("❌ حذف المستخدم المحدد", type="primary"):
+                    user_id_to_del = user_options[selected_user]
+                    conn = get_db_connection()
+                    conn.execute("DELETE FROM users WHERE id = ?", (user_id_to_del,))
+                    conn.commit()
+                    conn.close()
+                    st.success("تم حذف المستخدم بنجاح!")
+                    st.rerun()
+            else:
+                st.info("لا يوجد مستخدمون آخرون يمكن حذفهم.")
+
+        st.markdown("---")
+        st.subheader("📜 قائمة كافة المستخدمين")
         conn = get_db_connection()
         users = conn.execute("SELECT id, username, role, phone FROM users").fetchall()
         conn.close()
