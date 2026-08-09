@@ -143,7 +143,7 @@ def init_db():
             )
         """)
 
-        # كلمة سر الأقسام الخاصة (Section Passwords)
+        # جدول كلمة سر الأقسام الخاصة (Section Passwords)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS section_passwords (
                 section_name TEXT PRIMARY KEY,
@@ -162,14 +162,35 @@ def init_db():
                 "INSERT INTO users (username, password, role, phone) VALUES ('admin', 'admin123', 'Admin', '01000000000')"
             )
 
-        # جدول العقارات
+        # جدول العقارات (تحديث تفصيلي ممتد لضمان وجود أعمدة name و باقي التفاصيل)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS properties (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT, location TEXT, price REAL, status TEXT,
-                type TEXT, finishing TEXT
+                name TEXT, 
+                location TEXT, 
+                price REAL, 
+                status TEXT,
+                type TEXT, 
+                finishing TEXT
             )
         """)
+
+        # هجرة وتحديث أعمدة جدول العقارات تلقائياً عند تشغيل التطبيق
+        cursor.execute("PRAGMA table_info(properties)")
+        p_cols = [c[1] for c in cursor.fetchall()]
+        required_p_cols = {
+            "name": "TEXT",
+            "location": "TEXT",
+            "price": "REAL",
+            "status": "TEXT",
+            "type": "TEXT",
+            "finishing": "TEXT",
+        }
+        for col_name, col_type in required_p_cols.items():
+            if col_name not in p_cols:
+                cursor.execute(
+                    f"ALTER TABLE properties ADD COLUMN {col_name} {col_type}"
+                )
 
         # جدول مصاريف العقارات
         cursor.execute("""
@@ -285,7 +306,6 @@ def login_page():
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # عرض صورة صفحة الدخول المحددة مسبقاً من المطور لكل المستخدمين
         if cfg.get("logo_bytes"):
             st.image(cfg["logo_bytes"], use_container_width=True)
 
@@ -366,7 +386,6 @@ def login_page():
                     f"تم إرسال كود SMS إلى هاتفك المسجل باسم **{st.session_state['reset_username']}**."
                 )
 
-                # 🛑 عدم عرض الكود على الشاشة مطلقاً
                 user_otp = st.text_input(
                     "أدخل كود التحقق المكون من 6 أرقام:",
                     max_chars=6,
@@ -452,7 +471,6 @@ else:
         "📑 التقارير وإدارة المستندات",
     ]
 
-    # إضافة خيار الإعدادات للـ Admin فقط
     if is_admin:
         all_pages.append("⚙️ إعدادات المطور والثيمات")
 
@@ -756,6 +774,8 @@ else:
                             st.rerun()
                         except Exception as e:
                             st.error(f"حدث خطأ أثناء الحفظ: {e}")
+                    else:
+                        st.error("يرجى أدخال اسم العقار!")
 
         with tab2:
             props_df = safe_read_sql("SELECT id, name FROM properties")
@@ -964,7 +984,6 @@ else:
                         st.success(f"تم تسجيل المستثمر '{i_name}' بنجاح!")
                         st.rerun()
 
-        # --- حاسبة الأرباح والخسائر للمستثمرين ---
         with inv_tabs[1]:
             st.subheader("🧮 حاسبة الأرباح الخسائر التقديرية (P&L Calculator)")
             pnl_col1, pnl_col2 = st.columns(2)
@@ -995,7 +1014,6 @@ else:
                 st.metric("إجمالي المستحق النهائي", f"{net_total:,.2f} EGP")
                 st.metric("العائد الشهري المفترض", f"{monthly_payout:,.2f} EGP")
 
-        # --- الرسوم البيانية والأشكال الأوتوماتيكية ---
         with inv_tabs[2]:
             st.subheader("📊 التحليلات والرسوم البيانية الهيكلية")
             df_inv = safe_read_sql(
@@ -1185,7 +1203,7 @@ else:
                     use_container_width=True,
                 )
 
-    # --- 9. Developer Settings (حماية الـ Admin فقط) ---
+    # --- 9. Developer Settings ---
     elif page == "⚙️ إعدادات المطور والثيمات":
         if not is_admin:
             st.error("⛔ عذراً، هذه الصفحة مخصصة لمدير النظام (Admin) فقط!")
