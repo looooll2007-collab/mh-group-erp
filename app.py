@@ -350,9 +350,7 @@ def login_page():
                         st.session_state["user_role"] = (
                             res[0] if res[0] else "Admin"
                         )
-                        st.session_state["username"] = res[
-                            1
-                        ]  # الاسم المسجل كما هو بالظبط
+                        st.session_state["username"] = res[1]
 
                         log_session_start(res[1])
 
@@ -693,7 +691,8 @@ else:
             st.dataframe(sessions_df, use_container_width=True)
 
         with tab2:
-            with st.form("add_user_form"):
+            # تم إضافة clear_on_submit=True هنا لإعادة مسح النماذج فور حفظ المستخدم
+            with st.form("add_user_form", clear_on_submit=True):
                 u_name = st.text_input("اسم المستخدم")
                 u_pass = st.text_input("كلمة المرور", type="password")
                 u_phone = st.text_input("رقم الهاتف")
@@ -702,7 +701,9 @@ else:
                     ["Admin", "Manager", "HR", "IT", "Accountant"],
                 )
 
-                if st.form_submit_button("إضافة المستخدم"):
+                submit_user_btn = st.form_submit_button("إضافة المستخدم")
+
+                if submit_user_btn:
                     clean_username = u_name.strip()
                     if clean_username and u_pass:
                         try:
@@ -827,7 +828,7 @@ else:
             )
 
         with tab2:
-            with st.form("add_prop"):
+            with st.form("add_prop", clear_on_submit=True):
                 p_name = st.text_input("اسم العقار / الوحدة")
                 p_type = st.selectbox(
                     "نوع العقار:",
@@ -869,7 +870,7 @@ else:
         with tab3:
             props_df = safe_read_sql("SELECT id, name FROM properties")
             if not props_df.empty:
-                with st.form("add_expense_form"):
+                with st.form("add_expense_form", clear_on_submit=True):
                     selected_p_id = st.selectbox(
                         "اختر العقار:",
                         props_df["id"],
@@ -946,7 +947,7 @@ else:
         )
 
         with tab1:
-            with st.form("add_emp_form"):
+            with st.form("add_emp_form", clear_on_submit=True):
                 e_name = st.text_input("الاسم الكامل")
                 e_type = st.selectbox(
                     "نوع الفئة:", ["موظف ثابت", "عمالة مؤقتة (بالساعة/اليومية)"]
@@ -1022,7 +1023,7 @@ else:
         tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "📊 حاسبة الأرباح وسجل الاستثمار"])
 
         with tab1:
-            with st.form("add_inv"):
+            with st.form("add_inv", clear_on_submit=True):
                 inv_name = st.text_input("اسم المستثمر")
                 inv_amount = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
                 inv_rate = st.number_input("نسبة الربح السنوية (%)", min_value=0.0)
@@ -1060,7 +1061,7 @@ else:
         tab1, tab2 = st.tabs(["➕ إنشاء تذكرة دعم", "📋 التذاكر الحالية"])
 
         with tab1:
-            with st.form("add_ticket"):
+            with st.form("add_ticket", clear_on_submit=True):
                 t_title = st.text_input("عنوان المشكلة / الطلب")
                 t_cat = st.selectbox(
                     "التصنيف:",
