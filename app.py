@@ -60,11 +60,17 @@ def init_db():
         )
     ''')
 
-    # إضافة مستخدم مطور افتراضي إذا لم يكن موجوداً
+    # إضافة حساب المطور الافتراضي إذا لم يكن موجوداً
     cursor.execute("SELECT * FROM users WHERE username = 'developer'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
                        ('developer', 'admin123', 'المطور', '01000000000'))
+
+    # إضافة حساب المدير (Admin) الافتراضي إذا لم يكن موجوداً
+    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
+                       ('admin', 'admin123', 'مدير', '01000000000'))
 
     conn.commit()
     conn.close()
@@ -179,7 +185,7 @@ if not st.session_state.logged_in:
 
 else:
     # ------------------------------------------
-    # القائمة الجانبية والصلاحيات (تم إصلاح الخطأ هنا)
+    # القائمة الجانبية والصلاحيات
     # ------------------------------------------
     current_user = st.session_state.user if isinstance(st.session_state.user, dict) else dict(st.session_state.user)
     u_name = current_user.get('username', '')
@@ -193,8 +199,12 @@ else:
         st.rerun()
 
     menu = ["اللوحة الرئيسية", "قسم العقارات", "قسم المستثمرين"]
+    
+    # قسم المطور وإدارة المستخدمين تظهر فقط للمطور أو المديرين حسب الصلاحيات
     if u_role == "المطور":
         menu.append("💻 قسم المطور (الإعدادات)")
+        menu.append("👥 إدارة المستخدمين والصلاحيات")
+    elif u_role == "مدير":
         menu.append("👥 إدارة المستخدمين والصلاحيات")
 
     choice = st.sidebar.selectbox("الانتقال إلى", menu)
@@ -312,7 +322,7 @@ else:
             st.info("لا يوجد مستثمرون مسجلون حالياً.")
 
     # ------------------------------------------
-    # 4. قسم المطور (تعديل اللوحة الرئيسية)
+    # 4. قسم المطور (خاص بالمطور فقط)
     # ------------------------------------------
     elif choice == "💻 قسم المطور (الإعدادات)":
         st.header("💻 لوحة تحكم المطور")
@@ -333,7 +343,7 @@ else:
             st.success("تم تحديث إعدادات اللوحة الرئيسية بنجاح!")
 
     # ------------------------------------------
-    # 5. إدارة المستخدمين
+    # 5. إدارة المستخدمين والصلاحيات
     # ------------------------------------------
     elif choice == "👥 إدارة المستخدمين والصلاحيات":
         st.header("👥 إدارة المستخدمين والصلاحيات")
@@ -359,7 +369,7 @@ else:
                         except sqlite3.IntegrityError:
                             st.error("اسم المستخدم موجود بالفعل!")
                     else:
-                        st.warning("يرجى ملء جميع الحقول المطلوب بما فيها رقم الهاتف!")
+                        st.warning("يرجى ملء جميع الحقول المطلوبة بما فيها رقم الهاتف!")
 
         st.subheader("📜 قائمة المستخدمين")
         conn = get_db_connection()
