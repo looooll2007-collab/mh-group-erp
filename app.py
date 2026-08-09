@@ -11,14 +11,6 @@ import streamlit as st
 # 1. قائمة الثيمات وإعدادات الألوان (Themes)
 # ==========================================
 THEMES = {
-    "أزرق نيلي احترافي (Modern Indigo)": {
-        "primary": "#4F46E5",
-        "bg": "#F8FAFC",
-        "card": "#FFFFFF",
-        "text": "#1E293B",
-        "accent": "#6366F1",
-        "border": "#E2E8F0",
-    },
     "الداكن الملكي والذهبي (Royal Dark & Gold)": {
         "primary": "#D97706",
         "bg": "#0F172A",
@@ -26,6 +18,14 @@ THEMES = {
         "text": "#F8FAFC",
         "accent": "#F59E0B",
         "border": "#334155",
+    },
+    "أزرق نيلي احترافي (Modern Indigo)": {
+        "primary": "#4F46E5",
+        "bg": "#F8FAFC",
+        "card": "#FFFFFF",
+        "text": "#1E293B",
+        "accent": "#6366F1",
+        "border": "#E2E8F0",
     },
     "أخضر زمردي فخم (Emerald Slate)": {
         "primary": "#059669",
@@ -51,22 +51,6 @@ THEMES = {
         "accent": "#A855F7",
         "border": "#1F2937",
     },
-    "الصحراء والذهبي الدافئ (Desert Gold)": {
-        "primary": "#B45309",
-        "bg": "#FFFBEB",
-        "card": "#FFFFFF",
-        "text": "#78350F",
-        "accent": "#D97706",
-        "border": "#FEF3C7",
-    },
-    "الرمادي الرخامي الفاخر (Slate & Minimal Gray)": {
-        "primary": "#334155",
-        "bg": "#F1F5F9",
-        "card": "#FFFFFF",
-        "text": "#0F172A",
-        "accent": "#64748B",
-        "border": "#CBD5E1",
-    },
 }
 
 # --- تهيئة الصفحة ---
@@ -77,14 +61,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- إعدادات الجلسات (Session States) ---
+# --- إعدادات الجلسات المتطورة (Session States) ---
 if "login_config" not in st.session_state:
     st.session_state["login_config"] = {
         "title": "🏢 نظام إدارة MH Group ERP",
         "subtitle": "🔐 تسجيل الدخول للنظام",
         "btn_text": "تسجيل الدخول",
         "welcome_msg": "مرحباً بك! يرجى إدخال بياناتك للمتابعة.",
-        "recovery_key": "123456",
         "logo_bytes": None,
     }
 
@@ -100,7 +83,7 @@ if "selected_theme" not in st.session_state:
 
 current_theme = THEMES[st.session_state["selected_theme"]]
 
-# --- تطبيق CSS للمظهر ---
+# --- تطبيق CSS للمظهر العام ---
 st.markdown(
     f"""
 <style>
@@ -160,6 +143,14 @@ def init_db():
             )
         """)
 
+        # كلمة سر الأقسام الخاصة (Section Passwords)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS section_passwords (
+                section_name TEXT PRIMARY KEY,
+                password TEXT
+            )
+        """)
+
         cursor.execute("PRAGMA table_info(users)")
         u_cols = [c[1] for c in cursor.fetchall()]
         if "phone" not in u_cols:
@@ -179,19 +170,6 @@ def init_db():
                 type TEXT, finishing TEXT
             )
         """)
-
-        cursor.execute("PRAGMA table_info(properties)")
-        p_cols = [c[1] for c in cursor.fetchall()]
-        for col, dtype in [
-            ("name", "TEXT"),
-            ("location", "TEXT"),
-            ("price", "REAL"),
-            ("status", "TEXT"),
-            ("type", "TEXT"),
-            ("finishing", "TEXT"),
-        ]:
-            if col not in p_cols:
-                cursor.execute(f"ALTER TABLE properties ADD COLUMN {col} {dtype}")
 
         # جدول مصاريف العقارات
         cursor.execute("""
@@ -254,7 +232,6 @@ def safe_read_sql(query, params=()):
 # 3. دالة إرسال الـ SMS الحقيقية عبر البوابة
 # ==========================================
 def send_real_sms(phone_number, code):
-    """دالة إرسال الكود للرقم المسجل عبر API"""
     sms_user = st.secrets.get("SMS_USER", "YOUR_USER")
     sms_pass = st.secrets.get("SMS_PASS", "YOUR_PASS")
     sms_sender = st.secrets.get("SMS_SENDER", "MHGroup")
@@ -300,7 +277,7 @@ if "reset_username" not in st.session_state:
 
 
 # ==========================================
-# 5. شاشة تسجيل الدخول واستعادة كلمة السر
+# 5. شاشة تسجيل الدخول المخصصة
 # ==========================================
 def login_page():
     cfg = st.session_state["login_config"]
@@ -308,6 +285,7 @@ def login_page():
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        # عرض صورة صفحة الدخول المحددة مسبقاً من المطور لكل المستخدمين
         if cfg.get("logo_bytes"):
             st.image(cfg["logo_bytes"], use_container_width=True)
 
@@ -370,11 +348,10 @@ def login_page():
                             st.session_state["otp_code"] = generated_otp
                             st.session_state["reset_username"] = rec_username
 
-                            # إرسال الكود للرقم المسجل
                             send_real_sms(rec_phone, generated_otp)
 
                             st.session_state["reset_stage"] = "verify"
-                            st.success(f"تم إرسال كود التحقق إلى هاتفك المحمول.")
+                            st.success("تم إرسال كود التحقق إلى هاتفك المحمول.")
                             st.rerun()
                         else:
                             st.error("اسم المستخدم أو رقم الهاتف غير مطابق!")
@@ -389,7 +366,7 @@ def login_page():
                     f"تم إرسال كود SMS إلى هاتفك المسجل باسم **{st.session_state['reset_username']}**."
                 )
 
-                # 🛑 إخفاء الكود تماماً من واجهة الشاشة 🛑
+                # 🛑 عدم عرض الكود على الشاشة مطلقاً
                 user_otp = st.text_input(
                     "أدخل كود التحقق المكون من 6 أرقام:",
                     max_chars=6,
@@ -404,7 +381,7 @@ def login_page():
                             st.session_state["reset_stage"] = "new_pass"
                             st.rerun()
                         else:
-                            st.error("❌ الكود غير صحيح! يرجى إدخال الكود المرسل لبطاقتك.")
+                            st.error("❌ الكود غير صحيح! يرجى إعادة المحاولة.")
 
                 with col_v2:
                     if st.button("إلغاء", use_container_width=True):
@@ -453,7 +430,9 @@ else:
         f"**المستخدم:** {st.session_state['username']}\n\n**الصلاحية:** {st.session_state['user_role']}"
     )
 
-    if st.session_state["user_role"] == "Admin":
+    is_admin = st.session_state["user_role"] == "Admin"
+
+    if is_admin:
         dev_toggle = st.sidebar.checkbox(
             "🛠️ وضع المطور (Developer Mode)",
             value=st.session_state["is_developer"],
@@ -471,27 +450,19 @@ else:
         "💼 قسم المستثمرين والمالية",
         "💻 قسم تقنية المعلومات (IT Support)",
         "📑 التقارير وإدارة المستندات",
-        "⚙️ إعدادات المطور والثيمات",
     ]
+
+    # إضافة خيار الإعدادات للـ Admin فقط
+    if is_admin:
+        all_pages.append("⚙️ إعدادات المطور والثيمات")
 
     current_role = st.session_state["user_role"]
 
-    if st.session_state["is_developer"]:
+    if st.session_state["is_developer"] or is_admin:
         menu_options = all_pages
     else:
         menu_options = ["👤 الملف الشخصي (Profile)"]
-        if current_role == "Admin":
-            menu_options = [
-                "📊 لوحة التحكم الرئيسية",
-                "👤 الملف الشخصي (Profile)",
-                "👥 إدارة المستخدمين والصلاحيات",
-                "🏡 إدارة العقارات والوحدات",
-                "👷 إدارة الموارد البشرية والعمالة",
-                "💼 قسم المستثمرين والمالية",
-                "💻 قسم تقنية المعلومات (IT Support)",
-                "📑 التقارير وإدارة المستندات",
-            ]
-        elif current_role == "HR":
+        if current_role == "HR":
             menu_options.extend(
                 ["👷 إدارة الموارد البشرية والعمالة", "📑 التقارير وإدارة المستندات"]
             )
@@ -954,19 +925,27 @@ else:
             use_container_width=True,
         )
 
-    # --- 6. Investors ---
+    # --- 6. Investors & P&L Calculator ---
     elif page == "💼 قسم المستثمرين والمالية":
-        st.title("💼 قسم المستثمرين والرسوم البيانية")
-        tab1, tab2 = st.tabs(["➕ إضافة مستثمر", "❌ حذف مستثمر"])
+        st.title("💼 قسم المستثمرين، حاسبة الأرباح الخسائر، والرسوم البيانية")
 
-        with tab1:
+        inv_tabs = st.tabs(
+            [
+                "➕ تسجيل مستثمر",
+                "🧮 حاسبة الأرباح والخسائر (P&L)",
+                "📊 الرسوم البيانية والأشكال",
+                "❌ حذف مستثمر",
+            ]
+        )
+
+        with inv_tabs[0]:
             with st.form("add_inv_form"):
                 i_name = st.text_input("اسم المستثمر")
                 i_amount = st.number_input(
                     "مبلغ الاستثمار (EGP)", min_value=0.0, step=1000.0
                 )
                 i_rate = st.number_input(
-                    "نسبة العائد (%)", min_value=0.0, step=0.5
+                    "نسبة العائد المتفق عليها (%)", min_value=0.0, step=0.5
                 )
 
                 if st.form_submit_button("تسجيل المستثمر"):
@@ -985,7 +964,77 @@ else:
                         st.success(f"تم تسجيل المستثمر '{i_name}' بنجاح!")
                         st.rerun()
 
-        with tab2:
+        # --- حاسبة الأرباح والخسائر للمستثمرين ---
+        with inv_tabs[1]:
+            st.subheader("🧮 حاسبة الأرباح الخسائر التقديرية (P&L Calculator)")
+            pnl_col1, pnl_col2 = st.columns(2)
+
+            with pnl_col1:
+                calc_amount = st.number_input(
+                    "رأس المال المرجح استثماره (EGP):",
+                    min_value=0.0,
+                    value=100000.0,
+                    step=10000.0,
+                )
+                calc_rate = st.number_input(
+                    "نسبة العائد التقديرية (%):",
+                    min_value=0.0,
+                    value=15.0,
+                    step=0.5,
+                )
+                calc_months = st.slider(
+                    "مدة الاستثمار (بالشهور):", 1, 36, value=12
+                )
+
+            with pnl_col2:
+                gross_profit = calc_amount * (calc_rate / 100) * (calc_months / 12)
+                net_total = calc_amount + gross_profit
+                monthly_payout = gross_profit / calc_months
+
+                st.metric("إجمالي الربح المتوقع", f"{gross_profit:,.2f} EGP")
+                st.metric("إجمالي المستحق النهائي", f"{net_total:,.2f} EGP")
+                st.metric("العائد الشهري المفترض", f"{monthly_payout:,.2f} EGP")
+
+        # --- الرسوم البيانية والأشكال الأوتوماتيكية ---
+        with inv_tabs[2]:
+            st.subheader("📊 التحليلات والرسوم البيانية الهيكلية")
+            df_inv = safe_read_sql(
+                "SELECT name, investment_amount, return_rate FROM investors"
+            )
+
+            if not df_inv.empty:
+                col_chart1, col_chart2 = st.columns(2)
+
+                with col_chart1:
+                    st.markdown("#### 🍩 رسم دائري: توزيع رؤوس الأموال بين المستثمرين")
+                    st.vega_lite_chart(
+                        df_inv,
+                        {
+                            "mark": {"type": "arc", "innerRadius": 50},
+                            "encoding": {
+                                "field": "investment_amount",
+                                "type": "quantitative",
+                                "title": "مبلغ الاستثمار",
+                            },
+                            "color": {
+                                "field": "name",
+                                "type": "nominal",
+                                "title": "اسم المستثمر",
+                            },
+                        },
+                        use_container_width=True,
+                    )
+
+                with col_chart2:
+                    st.markdown("#### 📊 أعمدة بيانية: مقارنة نسب العوائد المتفق عليها")
+                    st.bar_chart(df_inv.set_index("name")["return_rate"])
+
+                st.markdown("#### 📈 الرسم البياني التراكمي للمستثمرين")
+                st.line_chart(df_inv.set_index("name")["investment_amount"])
+            else:
+                st.info("لا توجد بيانات مستثمرين لعرض الرسوم البيانية.")
+
+        with inv_tabs[3]:
             inv_df = safe_read_sql("SELECT id, name FROM investors")
             if not inv_df.empty:
                 del_inv_id = st.selectbox(
@@ -1003,17 +1052,6 @@ else:
                         conn.commit()
                     st.success("تم الحذف بنجاح")
                     st.rerun()
-
-        df_inv = safe_read_sql(
-            "SELECT name, investment_amount, return_rate FROM investors"
-        )
-        if not df_inv.empty:
-            c1, c2 = st.columns(2)
-            with c1:
-                st.bar_chart(df_inv.set_index("name")["investment_amount"])
-            with c2:
-                st.line_chart(df_inv.set_index("name")["return_rate"])
-            st.dataframe(df_inv, use_container_width=True)
 
     # --- 7. IT Support ---
     elif page == "💻 قسم تقنية المعلومات (IT Support)":
@@ -1147,46 +1185,102 @@ else:
                     use_container_width=True,
                 )
 
-    # --- 9. Developer Settings ---
+    # --- 9. Developer Settings (حماية الـ Admin فقط) ---
     elif page == "⚙️ إعدادات المطور والثيمات":
-        st.title("⚙️ إعدادات المطور وتخصيص النظام واللوحة الرئيسية")
-        dev_tab1, dev_tab2 = st.tabs(
-            ["📊 تخصيص اللوحة الرئيسية", "🎨 تخصيص الثيمات والواجهة"]
-        )
-
-        with dev_tab1:
-            dash_cfg = st.session_state["dashboard_config"]
-            with st.form("dev_dashboard_form"):
-                d_header = st.text_input(
-                    "عنوان اللوحة الرئيسية:", value=dash_cfg["header_title"]
-                )
-                d_show_metrics = st.checkbox(
-                    "عرض الإحصائيات والأرقام بالأعلى",
-                    value=dash_cfg["show_metrics"],
-                )
-                d_note = st.text_area(
-                    "الملاحظة / التنبيه الإداري العلوي:",
-                    value=dash_cfg["custom_note"],
-                )
-
-                if st.form_submit_button("حفظ إعدادات اللوحة الرئيسية"):
-                    st.session_state["dashboard_config"] = {
-                        "header_title": d_header,
-                        "show_metrics": d_show_metrics,
-                        "custom_note": d_note,
-                    }
-                    st.success("تم تحديث الإعدادات بنجاح!")
-
-        with dev_tab2:
-            selected_theme_name = st.selectbox(
-                "اختر الثيم العام المطبق للنظام:",
-                list(THEMES.keys()),
-                index=list(THEMES.keys()).index(
-                    st.session_state["selected_theme"]
-                ),
+        if not is_admin:
+            st.error("⛔ عذراً، هذه الصفحة مخصصة لمدير النظام (Admin) فقط!")
+        else:
+            st.title(
+                "⚙️ إعدادات المطور وتخصيص اللوحة الرئيسية وصفحة الدخول والكلمات السرية"
+            )
+            dev_tab1, dev_tab2, dev_tab3 = st.tabs(
+                [
+                    "🖼️ تخصيص صفحة الدخول واللوحة الرئيسية",
+                    "🎨 تغيير الثيمات والمظهر العام",
+                    "🔐 إدارة باسورد الأقسام والتأمين",
+                ]
             )
 
-            if selected_theme_name != st.session_state["selected_theme"]:
-                st.session_state["selected_theme"] = selected_theme_name
-                st.success(f"تم تطبيق ثيم: {selected_theme_name}")
-                st.rerun()
+            with dev_tab1:
+                st.subheader("🖼️ رفع وتحديد صورة صفحة تسجيل الدخول الرئيسية")
+                cfg_login = st.session_state["login_config"]
+
+                login_img_file = st.file_uploader(
+                    "اختر صورة ليتم تثبيتها كشعار/صورة أساسية لكل المستخدمين في صفحة الدخول:",
+                    type=["png", "jpg", "jpeg"],
+                )
+                if login_img_file:
+                    st.session_state["login_config"][
+                        "logo_bytes"
+                    ] = login_img_file.getvalue()
+                    st.success("تم تحديث صورة صفحة الدخول الثابتة للجميع بنجاح!")
+
+                st.markdown("---")
+                st.subheader("📊 تخصيص نص اللوحة الرئيسية والتنبيهات")
+                dash_cfg = st.session_state["dashboard_config"]
+                with st.form("dev_dashboard_form"):
+                    d_header = st.text_input(
+                        "عنوان اللوحة الرئيسية:",
+                        value=dash_cfg["header_title"],
+                    )
+                    d_show_metrics = st.checkbox(
+                        "عرض الإحصائيات والأرقام بالأعلى",
+                        value=dash_cfg["show_metrics"],
+                    )
+                    d_note = st.text_area(
+                        "الملاحظة / التنبيه الإداري العلوي:",
+                        value=dash_cfg["custom_note"],
+                    )
+
+                    if st.form_submit_button("حفظ إعدادات اللوحة"):
+                        st.session_state["dashboard_config"] = {
+                            "header_title": d_header,
+                            "show_metrics": d_show_metrics,
+                            "custom_note": d_note,
+                        }
+                        st.success("تم حفظ إعدادات اللوحة بنجاح!")
+
+            with dev_tab2:
+                st.subheader("🎨 التحكم المباشر بالثيم المطبق للموقع")
+                selected_theme_name = st.selectbox(
+                    "اختر الثيم المطبق للنظام بالكامل (Admin Only):",
+                    list(THEMES.keys()),
+                    index=list(THEMES.keys()).index(
+                        st.session_state["selected_theme"]
+                    ),
+                )
+
+                if selected_theme_name != st.session_state["selected_theme"]:
+                    st.session_state["selected_theme"] = selected_theme_name
+                    st.success(f"تم تطبيق الثيم الجديد: {selected_theme_name}")
+                    st.rerun()
+
+            with dev_tab3:
+                st.subheader("🔐 تغيير وتعيين كلمات مرور الأقسام المخصصة")
+                st.caption(
+                    "تتيح هذه الميزة للأدمن تعيين كلمة سر منفصلة لحماية أي قسم معين داخل النظام."
+                )
+
+                with st.form("section_pass_form"):
+                    target_sec = st.selectbox(
+                        "اختر القسم المراد تعيين/تغيير باسورد له:",
+                        [
+                            "إدارة العقارات والوحدات",
+                            "قسم المستثمرين والمالية",
+                            "إدارة الموارد البشرية والعمالة",
+                            "التقارير وإدارة المستندات",
+                        ],
+                    )
+                    sec_pass = st.text_input(
+                        "كلمة المرور المخصصة للقسم:", type="password"
+                    )
+
+                    if st.form_submit_button("حفظ كلمة سر القسم"):
+                        with sqlite3.connect("mh_group_erp.db") as conn:
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "INSERT OR REPLACE INTO section_passwords (section_name, password) VALUES (?, ?)",
+                                (target_sec, sec_pass),
+                            )
+                            conn.commit()
+                        st.success(f"تم تعيين كلمة سر القسم '{target_sec}' بنجاح!")
