@@ -3,7 +3,7 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-# --- Theme Palette Configuration ---
+# --- Expanded Theme Palette Configuration (7 Themes) ---
 THEMES = {
     "أزرق نيلي احترافي (Modern Indigo)": {
         "primary": "#4F46E5",
@@ -37,6 +37,31 @@ THEMES = {
         "accent": "#E11D48",
         "border": "#FFE4E6",
     },
+    # 🌟 الثيمات الجديدة المضافة:
+    "الليل والسيبربانك (Cyberpunk Neon)": {
+        "primary": "#06B6D4",
+        "bg": "#0B0F19",
+        "card": "#111827",
+        "text": "#F3F4F6",
+        "accent": "#A855F7",
+        "border": "#1F2937",
+    },
+    "الصحراء والذهبي الدافئ (Desert Gold)": {
+        "primary": "#B45309",
+        "bg": "#FFFBEB",
+        "card": "#FFFFFF",
+        "text": "#78350F",
+        "accent": "#D97706",
+        "border": "#FEF3C7",
+    },
+    "الرمادي الرخامي الفاخر (Slate & Minimal Gray)": {
+        "primary": "#334155",
+        "bg": "#F1F5F9",
+        "card": "#FFFFFF",
+        "text": "#0F172A",
+        "accent": "#64748B",
+        "border": "#CBD5E1",
+    },
 }
 
 # --- Page Configuration ---
@@ -46,6 +71,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# --- Default Custom Login Settings in Session ---
+if "login_config" not in st.session_state:
+  st.session_state["login_config"] = {
+      "title": "🏢 نظام إدارة MH Group ERP",
+      "subtitle": "🔐 تسجيل الدخول للنظام",
+      "btn_text": "تسجيل الدخول",
+      "welcome_msg": "مرحباً بك! يرجى إدخال بياناتك للمتابعة.",
+  }
 
 # --- Preserve Theme Across Refresh via Query Params ---
 if "theme" in st.query_params:
@@ -200,19 +234,24 @@ if "username" not in st.session_state:
   st.session_state["username"] = ""
 if "is_developer" not in st.session_state:
   st.session_state["is_developer"] = False
+if "profile_pic" not in st.session_state:
+  st.session_state["profile_pic"] = None
 
 
 def login_page():
+  cfg = st.session_state["login_config"]
   st.markdown(
-      "<h1 class='main-header'>🏢 نظام إدارة MH Group ERP</h1>",
-      unsafe_allow_html=True,
+      f"<h1 class='main-header'>{cfg['title']}</h1>", unsafe_allow_html=True
   )
+
   col1, col2, col3 = st.columns([1, 2, 1])
   with col2:
-    st.subheader("🔐 تسجيل الدخول")
+    st.subheader(cfg["subtitle"])
+    st.caption(cfg["welcome_msg"])
+
     username_input = st.text_input("اسم المستخدم")
     password_input = st.text_input("كلمة المرور", type="password")
-    login_btn = st.button("دخول", use_container_width=True)
+    login_btn = st.button(cfg["btn_text"], use_container_width=True)
 
     if login_btn:
       with sqlite3.connect("mh_group_erp.db") as conn:
@@ -237,6 +276,11 @@ if not st.session_state["logged_in"]:
   login_page()
 else:
   st.sidebar.title("🏢 MH Group ERP")
+
+  # Sidebar Profile Picture & Info
+  if st.session_state["profile_pic"]:
+    st.sidebar.image(st.session_state["profile_pic"], width=90)
+
   st.sidebar.markdown(
       f"**المستخدم:** {st.session_state['username']}"
       f" ({st.session_state['user_role']})"
@@ -321,21 +365,75 @@ else:
       )
       st.dataframe(prop_summary, use_container_width=True)
 
-  # --- 2. Profile Section ---
+  # --- 2. Profile Section (Fully Updated) ---
   elif page == "👤 الملف الشخصي (Profile)":
     st.title("👤 إدارة الملف الشخصي والحساب")
 
-    col_prof1, col_prof2 = st.columns([1, 2])
+    col_img, col_info = st.columns([1, 2])
 
-    with col_prof1:
-      st.markdown("### 📋 بيانات الحساب")
-      st.info(f"**اسم المستخدم:** {st.session_state['username']}")
-      st.info(f"**الصلاحية:** {st.session_state['user_role']}")
-      st.info(
-          f"**تاريخ الجلسة:** {datetime.datetime.now().strftime('%Y-%m-%d')}"
+    with col_img:
+      st.markdown("### 🖼️ الصورة الشخصية")
+      if st.session_state["profile_pic"]:
+        st.image(
+            st.session_state["profile_pic"],
+            width=180,
+            caption="الصورة الحالية",
+        )
+      else:
+        st.info("لم يتم رفع صورة شخصية بعد.")
+
+      uploaded_pic = st.file_uploader(
+          "رفع / تغيير الصورة", type=["jpg", "png", "jpeg"]
       )
+      if uploaded_pic:
+        st.session_state["profile_pic"] = uploaded_pic.getvalue()
+        st.success("تم تحديث الصورة الشخصية بنجاح!")
+        st.rerun()
 
-    with col_prof2:
+    with col_info:
+      st.markdown("### ✏️ تعديل البيانات الشخصية")
+      with st.form("edit_profile_form"):
+        new_username = st.text_input(
+            "اسم المستخدم الحالي:", value=st.session_state["username"]
+        )
+        new_role = st.selectbox(
+            "الصلاحية / الوظيفة:",
+            ["Admin", "Manager", "HR", "IT", "Accountant"],
+            index=[
+                "Admin",
+                "Manager",
+                "HR",
+                "IT",
+                "Accountant",
+            ].index(
+                st.session_state["user_role"]
+                if st.session_state["user_role"]
+                in ["Admin", "Manager", "HR", "IT", "Accountant"]
+                else "Admin"
+            ),
+        )
+
+        if st.form_submit_button("حفظ التعديلات"):
+          try:
+            with sqlite3.connect("mh_group_erp.db") as conn:
+              cursor = conn.cursor()
+              cursor.execute(
+                  "UPDATE users SET username = ?, role = ? WHERE username = ?",
+                  (new_username, new_role, st.session_state["username"]),
+              )
+              conn.commit()
+
+            st.session_state["username"] = new_username
+            st.session_state["user_role"] = new_role
+            st.success("تم تحديث البيانات الشخصية بنجاح!")
+            st.rerun()
+          except sqlite3.IntegrityError:
+            st.error("اسم المستخدم الجديد مستخدم بالفعل!")
+
+    st.markdown("---")
+    col_p1, col_p2 = st.columns(2)
+
+    with col_p1:
       st.markdown("### 🔐 تغيير كلمة المرور")
       with st.form("change_pass_form"):
         old_pass = st.text_input("كلمة المرور الحالية", type="password")
@@ -368,19 +466,19 @@ else:
               else:
                 st.error("كلمة المرور الحالية غير صحيحة!")
 
-    st.markdown("---")
-    st.markdown("### 🎨 الثيم الشخصي المفضل")
-    selected_theme_profile = st.selectbox(
-        "اختر الثيم المفضل لحسابك:",
-        list(THEMES.keys()),
-        index=list(THEMES.keys()).index(st.session_state["selected_theme"]),
-    )
+    with col_p2:
+      st.markdown("### 🎨 الثيم الشخصي المفضل")
+      selected_theme_profile = st.selectbox(
+          "اختر الثيم المفضل لحسابك:",
+          list(THEMES.keys()),
+          index=list(THEMES.keys()).index(st.session_state["selected_theme"]),
+      )
 
-    if selected_theme_profile != st.session_state["selected_theme"]:
-      st.session_state["selected_theme"] = selected_theme_profile
-      st.query_params["theme"] = selected_theme_profile
-      st.success(f"تم حفظ وتطبيق ثيم: {selected_theme_profile}")
-      st.rerun()
+      if selected_theme_profile != st.session_state["selected_theme"]:
+        st.session_state["selected_theme"] = selected_theme_profile
+        st.query_params["theme"] = selected_theme_profile
+        st.success(f"تم حفظ وتطبيق ثيم: {selected_theme_profile}")
+        st.rerun()
 
   # --- 3. Users Management ---
   elif page == "👥 إدارة المستخدمين والصلاحيات":
@@ -688,17 +786,48 @@ else:
           file_name=f"{rep_type}.csv",
       )
 
-  # --- Developer & Themes ---
+  # --- 9. Developer & Themes (With Login Customizer) ---
   elif page == "⚙️ إعدادات المطور والثيمات":
-    st.title("⚙️ إعدادات المطور والثيمات")
-    selected_theme_name = st.selectbox(
-        "اختر ثيم لوحة التحكم (سيتم حفظه حتى بعد الـ Refresh):",
-        list(THEMES.keys()),
-        index=list(THEMES.keys()).index(st.session_state["selected_theme"]),
+    st.title("⚙️ لوحة تحكم المطور والثيمات")
+
+    tab_dev1, tab_dev2 = st.tabs(
+        ["🎨 اختيار الثيم العام", "🔐 التعديل على شاشة الدخول"]
     )
 
-    if selected_theme_name != st.session_state["selected_theme"]:
-      st.session_state["selected_theme"] = selected_theme_name
-      st.query_params["theme"] = selected_theme_name
-      st.success(f"تم تطبيق وحفظ ثيم: {selected_theme_name}")
-      st.rerun()
+    with tab_dev1:
+      selected_theme_name = st.selectbox(
+          "اختر ثيم لوحة التحكم (سيتم حفظه حتى بعد الـ Refresh):",
+          list(THEMES.keys()),
+          index=list(THEMES.keys()).index(st.session_state["selected_theme"]),
+      )
+
+      if selected_theme_name != st.session_state["selected_theme"]:
+        st.session_state["selected_theme"] = selected_theme_name
+        st.query_params["theme"] = selected_theme_name
+        st.success(f"تم تطبيق وحفظ ثيم: {selected_theme_name}")
+        st.rerun()
+
+    with tab_dev2:
+      st.subheader("🔑 تخصيص نصوص ومظهر شاشة تسجيل الدخول")
+      cfg = st.session_state["login_config"]
+
+      with st.form("custom_login_form"):
+        title_in = st.text_input("العنوان الرئيسي لشاشة الدخول:", value=cfg["title"])
+        subtitle_in = st.text_input(
+            "العنوان الفرعي:", value=cfg["subtitle"]
+        )
+        welcome_in = st.text_input(
+            "الرسالة الترحيبية / التعليمات:", value=cfg["welcome_msg"]
+        )
+        btn_in = st.text_input("نص زر الدخول:", value=cfg["btn_text"])
+
+        if st.form_submit_button("حفظ إعدادات شاشة الدخول"):
+          st.session_state["login_config"] = {
+              "title": title_in,
+              "subtitle": subtitle_in,
+              "btn_text": btn_in,
+              "welcome_msg": welcome_in,
+          }
+          st.success(
+              "تم حفظ إعدادات شاشة الدخول! ستظهر التعديلات عند تسجيل الخروج."
+          )
