@@ -80,6 +80,7 @@ if "login_config" not in st.session_state:
       "subtitle": "🔐 تسجيل الدخول للنظام",
       "btn_text": "تسجيل الدخول",
       "welcome_msg": "مرحباً بك! يرجى إدخال بياناتك للمتابعة.",
+      "recovery_key": "123456",  # رمز استعادة كلمة السر الافتراضي
   }
 
 # --- Preserve Theme Across Refresh via Query Params ---
@@ -251,6 +252,8 @@ if "is_developer" not in st.session_state:
   st.session_state["is_developer"] = False
 if "profile_pic" not in st.session_state:
   st.session_state["profile_pic"] = None
+if "show_forgot_password" not in st.session_state:
+  st.session_state["show_forgot_password"] = False
 
 
 def login_page():
@@ -264,27 +267,75 @@ def login_page():
     st.subheader(cfg["subtitle"])
     st.caption(cfg["welcome_msg"])
 
-    username_input = st.text_input("اسم المستخدم")
-    password_input = st.text_input("كلمة المرور", type="password")
-    login_btn = st.button(cfg["btn_text"], use_container_width=True)
+    if not st.session_state["show_forgot_password"]:
+      # Normal Login Form
+      username_input = st.text_input("اسم المستخدم")
+      password_input = st.text_input("كلمة المرور", type="password")
 
-    if login_btn:
-      with sqlite3.connect("mh_group_erp.db") as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT role FROM users WHERE username = ? AND password = ?",
-            (username_input, password_input),
-        )
-        res = cursor.fetchone()
+      btn_col1, btn_col2 = st.columns([2, 1])
+      with btn_col1:
+        login_btn = st.button(cfg["btn_text"], use_container_width=True)
+      with btn_col2:
+        if st.button("نسيت كلمة السر؟", use_container_width=True):
+          st.session_state["show_forgot_password"] = True
+          st.rerun()
 
-      if res:
-        st.session_state["logged_in"] = True
-        st.session_state["user_role"] = res[0]
-        st.session_state["username"] = username_input
-        st.success("تم تسجيل الدخول بنجاح!")
-        st.rerun()
-      else:
-        st.error("بيانات الدخول غير صحيحة!")
+      if login_btn:
+        with sqlite3.connect("mh_group_erp.db") as conn:
+          cursor = conn.cursor()
+          cursor.execute(
+              "SELECT role FROM users WHERE username = ? AND password = ?",
+              (username_input, password_input),
+          )
+          res = cursor.fetchone()
+
+        if res:
+          st.session_state["logged_in"] = True
+          st.session_state["user_role"] = res[0]
+          st.session_state["username"] = username_input
+          st.success("تم تسجيل الدخول بنجاح!")
+          st.rerun()
+        else:
+          st.error("بيانات الدخول غير صحيحة!")
+
+    else:
+      # Recovery Form
+      st.info("🔑 إعادة تعيين كلمة السر باستخدام رمز الاستعادة")
+      rec_username = st.text_input("اسم المستخدم المتراد استعادة حسابه:")
+      rec_key = st.text_input("رمز استعادة النظام (Recovery Key):", type="password", help="الرمز الافتراضي للنظام هو 123456")
+      new_reset_pass = st.text_input("كلمة السر الجديدة:", type="password")
+      confirm_reset_pass = st.text_input("تأكيد كلمة السر الجديدة:", type="password")
+
+      rec_col1, rec_col2 = st.columns(2)
+      with rec_col1:
+        if st.button("تحديث كلمة السر", use_container_width=True):
+          if not rec_username or not rec_key or not new_reset_pass:
+            st.error("يرجى ملء جميع الحقول المطلوبة!")
+          elif rec_key != cfg["recovery_key"]:
+            st.error("رمز استعادة النظام غير صحيح!")
+          elif new_reset_pass != confirm_reset_pass:
+            st.error("كلمتا المرور غير متطابقتين!")
+          else:
+            with sqlite3.connect("mh_group_erp.db") as conn:
+              cursor = conn.cursor()
+              cursor.execute("SELECT id FROM users WHERE username = ?", (rec_username,))
+              user_exists = cursor.fetchone()
+
+              if user_exists:
+                cursor.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (new_reset_pass, rec_username),
+                )
+                conn.commit()
+                st.success("✅ تم تحديث كلمة السر بنجاح! يمكنك الان تسجيل الدخول.")
+                st.session_state["show_forgot_password"] = False
+              else:
+                st.error("اسم المستخدم غير موجود بالنظام!")
+      
+      with rec_col2:
+        if st.button("الرجوع لتسجيل الدخول", use_container_width=True):
+          st.session_state["show_forgot_password"] = False
+          st.rerun()
 
 
 if not st.session_state["logged_in"]:
@@ -618,7 +669,6 @@ else:
         e_name = st.text_input("اسم الفرد / اسم توريد المقاول")
         e_pos = st.text_input("المسمى الوظيفي / اسم الشركة أو المقاولة")
 
-        # Dynamic Options for Suppliers/Contractors
         w_count = 1
         c_type = "عامل عادي"
 
@@ -875,12 +925,10 @@ else:
           st.write(f"**تاريخ الرفع:** {d_date}")
 
           if d_bytes:
-            # Image Preview
             if d_type and "image" in d_type:
               st.image(
                   d_bytes, caption=d_name, use_container_width=True
               )
-            # Text Preview
             elif d_type and "text" in d_type:
               st.text_area(
                   "محتوى الملف:",
@@ -892,7 +940,6 @@ else:
                   "لا تتوفر معاينة صوَرية مباشرة لهذا النوع من الملفات (PDF/Word/Excel)."
               )
 
-            # Direct Download Button
             st.download_button(
                 label=f"⬇️ تحميل الملف ({d_name})",
                 data=d_bytes,
@@ -937,7 +984,7 @@ else:
     st.title("⚙️ لوحة تحكم المطور والثيمات")
 
     tab_dev1, tab_dev2 = st.tabs(
-        ["🎨 اختيار الثيم العام", "🔐 التعديل على شاشة الدخول"]
+        ["🎨 اختيار الثيم العام", "🔐 التعديل على شاشة الدخول والأمان"]
     )
 
     with tab_dev1:
@@ -954,7 +1001,7 @@ else:
         st.rerun()
 
     with tab_dev2:
-      st.subheader("🔑 تخصيص نصوص ومظهر شاشة تسجيل الدخول")
+      st.subheader("🔑 تخصيص نصوص وشاشة تسجيل الدخول ورمز الاستعادة")
       cfg = st.session_state["login_config"]
 
       with st.form("custom_login_form"):
@@ -966,14 +1013,16 @@ else:
             "الرسالة الترحيبية / التعليمات:", value=cfg["welcome_msg"]
         )
         btn_in = st.text_input("نص زر الدخول:", value=cfg["btn_text"])
+        rec_key_in = st.text_input("رمز استعادة النظام (Recovery Key):", value=cfg["recovery_key"], help="هذا الرمز يتم استخدامه في حالة نسيان كلمة المرور")
 
-        if st.form_submit_button("حفظ إعدادات شاشة الدخول"):
+        if st.form_submit_button("حفظ إعدادات الأمان وشاشة الدخول"):
           st.session_state["login_config"] = {
               "title": title_in,
               "subtitle": subtitle_in,
               "btn_text": btn_in,
               "welcome_msg": welcome_in,
+              "recovery_key": rec_key_in,
           }
           st.success(
-              "تم حفظ إعدادات شاشة الدخول! ستظهر التعديلات عند تسجيل الخروج."
+              "تم حفظ إعدادات الأمان وشاشة الدخول بنجاح!"
           )
