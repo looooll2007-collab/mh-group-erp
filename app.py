@@ -15,7 +15,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # جدول المستخدمين (يحتوي على رقم الهاتف وكود إعادة التعيين)
+    # جدول المستخدمين
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +27,7 @@ def init_db():
         )
     ''')
     
-    # جدول العقارات (شامل التفاصيل والمصاريف)
+    # جدول العقارات (تم تحديث الحقول)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +52,7 @@ def init_db():
         )
     ''')
     
-    # جدول إعدادات اللوحة الرئيسية (خاص بحساب المطور)
+    # جدول إعدادات اللوحة الرئيسية (خاص بجهة المطور)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS system_settings (
             key TEXT PRIMARY KEY,
@@ -60,17 +60,11 @@ def init_db():
         )
     ''')
 
-    # إضافة حساب المطور الافتراضي
+    # إضافة مستخدم مطور افتراضي إذا لم يكن موجوداً
     cursor.execute("SELECT * FROM users WHERE username = 'developer'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
                        ('developer', 'admin123', 'المطور', '01000000000'))
-
-    # إضافة حساب المدير (Admin) الافتراضي
-    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-    if not cursor.fetchone():
-        cursor.execute("INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
-                       ('admin', 'admin123', 'مدير', '01000000000'))
 
     conn.commit()
     conn.close()
@@ -78,14 +72,16 @@ def init_db():
 init_db()
 
 # ==========================================
-# 2. وظيفة محاكاة إرسال SMS
+# 2. وظائف إرسال SMS واختبار الرموز
 # ==========================================
 def send_sms_otp(phone, code):
+    # هنا يتم ربط API إرسال الرسائل (مثل Twilio أو SmsMisr)
+    # حالياً يتم التظاهر ببدل الإرسال وعرض الرمز تجريبياً
     st.info(f"📱 [محاكاة SMS] تم إرسال كود التحقق ({code}) إلى الرقم: {phone}")
     return True
 
 # ==========================================
-# 3. واجهة التطبيق الرئيسية
+# 3. واجهة المستخدم والتنقل
 # ==========================================
 st.set_page_config(page_title="MH GROUP - نظام الإدارة", layout="wide")
 
@@ -102,10 +98,10 @@ st.title("🏢 نظام MH GROUP للاستثمار والتطوير العقا�
 # نظام تسجيل الدخول واستعادة كلمة السر
 # ------------------------------------------
 if not st.session_state.logged_in:
-    tab1, tab2 = st.tabs(["🔑 تسجيل الدخول", "📲 نسيت كلمة السر؟"])
+    tab1, tab2 = st.tabs(["تسجيل الدخول", "نسيت كلمة السر؟"])
     
     with tab1:
-        st.subheader("تسجيل الدخول")
+        st.subheader("🔑 تسجيل الدخول")
         username = st.text_input("اسم المستخدم")
         password = st.text_input("كلمة السر", type="password")
         if st.button("دخول"):
@@ -121,34 +117,27 @@ if not st.session_state.logged_in:
                 st.error("اسم المستخدم أو كلمة السر غير صحيحة.")
 
     with tab2:
-        st.subheader("استعادة كلمة السر عبر SMS")
+        st.subheader("📲 استعادة كلمة السر عبر SMS")
         
-        # المرحلة الأولى: طلب اسم المستخدم وإرسال الكود
         if st.session_state.reset_stage == "request":
             reset_username = st.text_input("أدخل اسم المستخدم للتحقق", key="reset_user")
             if st.button("إرسال كود التحقق"):
                 conn = get_db_connection()
                 user = conn.execute("SELECT * FROM users WHERE username = ?", (reset_username,)).fetchone()
-                if user:
-                    user_dict = dict(user)
-                    if user_dict.get("phone"):
-                        otp = "".join(random.choices(string.digits, k=6))
-                        conn.execute("UPDATE users SET reset_code = ? WHERE id = ?", (otp, user_dict["id"]))
-                        conn.commit()
-                        conn.close()
-                        
-                        st.session_state.reset_target_user = user_dict["username"]
-                        send_sms_otp(user_dict["phone"], otp)
-                        st.session_state.reset_stage = "verify"
-                        st.rerun()
-                    else:
-                        conn.close()
-                        st.error("هذا المستخدم لا يملك رقم هاتف مسجل!")
+                if user and user["phone"]:
+                    otp = "".join(random.choices(string.digits, k=6))
+                    conn.execute("UPDATE users SET reset_code = ? WHERE id = ?", (otp, user["id"]))
+                    conn.commit()
+                    conn.close()
+                    
+                    st.session_state.reset_target_user = user["username"]
+                    send_sms_otp(user["phone"], otp)
+                    st.session_state.reset_stage = "verify"
+                    st.rerun()
                 else:
                     conn.close()
-                    st.error("المستخدم غير موجود!")
+                    st.error("المستخدم غير موجود أو لا يملك رقم هاتف مسجل!")
 
-        # المرحلة الثانية: أدخال كود SMS والتحقق منه
         elif st.session_state.reset_stage == "verify":
             st.info(f"تم إرسال كود التحقق للمستخدم: {st.session_state.get('reset_target_user')}")
             input_code = st.text_input("أدخل الكود المكون من 6 أرقام", max_chars=6)
@@ -158,16 +147,13 @@ if not st.session_state.logged_in:
                 user = conn.execute("SELECT * FROM users WHERE username = ?", (st.session_state.reset_target_user,)).fetchone()
                 conn.close()
                 
-                if user:
-                    user_dict = dict(user)
-                    if user_dict.get("reset_code") == input_code and input_code != "":
-                        st.success("الكود صحيح! جاري الانتقال لصفحة تغيير كلمة السر...")
-                        st.session_state.reset_stage = "change"
-                        st.rerun()
-                    else:
-                        st.error("❌ الكود غير صحيح! يرجى التأكد وإعادة المحاولة.")
+                if user and user["reset_code"] == input_code and input_code != "":
+                    st.success("الكود صحيح! جاري الانتقال لصفحة تغيير كلمة السر...")
+                    st.session_state.reset_stage = "change"
+                    st.rerun()
+                else:
+                    st.error("❌ الكود غير صحيح! يرجى التأكد وإعادة المحاولة.")
 
-        # المرحلة الثالثة: تعيين كلمة سر جديدة
         elif st.session_state.reset_stage == "change":
             st.subheader("🔒 تعيين كلمة سر جديدة")
             new_pass = st.text_input("كلمة السر الجديدة", type="password")
@@ -187,29 +173,20 @@ if not st.session_state.logged_in:
 
 else:
     # ------------------------------------------
-    # القائمة الجانبية وإدارة التنقل والأقسام
+    # القائمة الجانبية والصلاحيات
     # ------------------------------------------
-    current_user = st.session_state.user if isinstance(st.session_state.user, dict) else dict(st.session_state.user)
-    u_name = current_user.get('username', '')
-    u_role = current_user.get('role', '')
-
-    st.sidebar.write(f"مرحباً، **{u_name}** ({u_role})")
-    
+    st.sidebar.write(f"مرحباً، **{st.session_state.user['username']}** ({st.session_state.user['role']})")
     if st.sidebar.button("تسجيل الخروج"):
         st.session_state.logged_in = False
         st.session_state.user = None
         st.rerun()
 
     menu = ["اللوحة الرئيسية", "قسم العقارات", "قسم المستثمرين"]
-    
-    # تحديد الأقسام المتاحة بناءً على الصلاحيات
-    if u_role == "المطور":
+    if st.session_state.user["role"] == "المطور":
         menu.append("💻 قسم المطور (الإعدادات)")
         menu.append("👥 إدارة المستخدمين والصلاحيات")
-    elif u_role == "مدير":
-        menu.append("👥 إدارة المستخدمين والصلاحيات")
 
-    choice = st.sidebar.selectbox("الانتقال إلى القسم", menu)
+    choice = st.sidebar.selectbox("الانتقال إلى", menu)
 
     # ------------------------------------------
     # 1. اللوحة الرئيسية
@@ -232,7 +209,7 @@ else:
         col2.metric("إجمالي المستثمرين", inv_count)
 
     # ------------------------------------------
-    # 2. قسم العقارات
+    # 2. قسم العقارات (معدل ومصحح الأخطاء)
     # ------------------------------------------
     elif choice == "قسم العقارات":
         st.header("🏠 إدارة العقارات")
@@ -281,7 +258,7 @@ else:
             st.info("لا توجد عقارات مسجلة حالياً.")
 
     # ------------------------------------------
-    # 3. قسم المستثمرين
+    # 3. قسم المستثمرين (مصحح الأخطاء)
     # ------------------------------------------
     elif choice == "قسم المستثمرين":
         st.header("💼 إدارة المستثمرين")
@@ -324,7 +301,7 @@ else:
             st.info("لا يوجد مستثمرون مسجلون حالياً.")
 
     # ------------------------------------------
-    # 4. قسم المطور (خاص بالمطور فقط)
+    # 4. قسم المطور (تعديل اللوحة الرئيسية)
     # ------------------------------------------
     elif choice == "💻 قسم المطور (الإعدادات)":
         st.header("💻 لوحة تحكم المطور")
@@ -345,14 +322,12 @@ else:
             st.success("تم تحديث إعدادات اللوحة الرئيسية بنجاح!")
 
     # ------------------------------------------
-    # 5. إدارة المستخدمين والصلاحيات (إضافة + حذف)
+    # 5. إدارة المستخدمين إضافة رقم الهاتف
     # ------------------------------------------
     elif choice == "👥 إدارة المستخدمين والصلاحيات":
         st.header("👥 إدارة المستخدمين والصلاحيات")
         
-        tab_add, tab_delete = st.tabs(["➕ إضافة مستخدم", "🗑️ حذف مستخدم"])
-        
-        with tab_add:
+        with st.expander("➕ إضافة مستخدم جديد"):
             with st.form("add_user_form"):
                 u_name = st.text_input("اسم المستخدم")
                 u_pass = st.text_input("كلمة السر", type="password")
@@ -375,28 +350,7 @@ else:
                     else:
                         st.warning("يرجى ملء جميع الحقول المطلوب بما فيها رقم الهاتف!")
 
-        with tab_delete:
-            conn = get_db_connection()
-            all_users = conn.execute("SELECT id, username, role FROM users").fetchall()
-            conn.close()
-            
-            user_options = {f"{u['username']} ({u['role']})": u['id'] for u in all_users if u['username'] != u_name}
-            
-            if user_options:
-                selected_user = st.selectbox("اختر المستخدم المراد حذفه", list(user_options.keys()))
-                if st.button("❌ حذف المستخدم المحدد", type="primary"):
-                    user_id_to_del = user_options[selected_user]
-                    conn = get_db_connection()
-                    conn.execute("DELETE FROM users WHERE id = ?", (user_id_to_del,))
-                    conn.commit()
-                    conn.close()
-                    st.success("تم حذف المستخدم بنجاح!")
-                    st.rerun()
-            else:
-                st.info("لا يوجد مستخدمون آخرون يمكن حذفهم.")
-
-        st.markdown("---")
-        st.subheader("📜 قائمة كافة المستخدمين")
+        st.subheader("📜 قائمة المستخدمين")
         conn = get_db_connection()
         users = conn.execute("SELECT id, username, role, phone FROM users").fetchall()
         conn.close()
