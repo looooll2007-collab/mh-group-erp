@@ -691,8 +691,15 @@ else:
             st.dataframe(sessions_df, use_container_width=True)
 
         with tab2:
-            # تم إضافة clear_on_submit=True هنا لإعادة مسح النماذج فور حفظ المستخدم
-            with st.form("add_user_form", clear_on_submit=True):
+            st.subheader("➕ إضافة مستخدم جديد")
+
+            # عرض التنبيهات من الجلسة في بداية التبويب لإظهار نتيجة العملية السابقة
+            if "user_msg_success" in st.session_state:
+                st.success(st.session_state.pop("user_msg_success"))
+            if "user_msg_error" in st.session_state:
+                st.error(st.session_state.pop("user_msg_error"))
+
+            with st.form("add_new_user_form_v2", clear_on_submit=True):
                 u_name = st.text_input("اسم المستخدم")
                 u_pass = st.text_input("كلمة المرور", type="password")
                 u_phone = st.text_input("رقم الهاتف")
@@ -705,7 +712,9 @@ else:
 
                 if submit_user_btn:
                     clean_username = u_name.strip()
-                    if clean_username and u_pass:
+                    clean_pass = u_pass.strip()
+
+                    if clean_username and clean_pass:
                         try:
                             with sqlite3.connect("mh_group_erp.db", timeout=10) as conn:
                                 cursor = conn.cursor()
@@ -713,27 +722,39 @@ else:
                                     "SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)",
                                     (clean_username,),
                                 )
-                                if cursor.fetchone():
-                                    st.error(
+                                existing_user = cursor.fetchone()
+
+                                if existing_user:
+                                    st.session_state["user_msg_error"] = (
                                         f"❌ المستخدم '{clean_username}' موجود بالفعل في قاعدة البيانات!"
                                     )
                                 else:
-                                    conn.execute(
+                                    cursor.execute(
                                         "INSERT INTO users (username, password, role, phone) VALUES (?, ?, ?, ?)",
                                         (
                                             clean_username,
-                                            u_pass,
+                                            clean_pass,
                                             u_role,
                                             u_phone.strip(),
                                         ),
                                     )
                                     conn.commit()
-                                    st.success(
+                                    st.session_state["user_msg_success"] = (
                                         f"✅ تم إضافة المستخدم '{clean_username}' بنجاح!"
                                     )
-                                    st.rerun()
+
+                                st.rerun()
+
                         except sqlite3.IntegrityError:
-                            st.error("❌ اسم المستخدم مسجل مسبقاً!")
+                            st.session_state["user_msg_error"] = (
+                                "❌ اسم المستخدم مسجل مسبقاً!"
+                            )
+                            st.rerun()
+                        except Exception as e:
+                            st.session_state["user_msg_error"] = (
+                                f"حدث خطأ أثناء الحفظ: {e}"
+                            )
+                            st.rerun()
                     else:
                         st.error("يرجى إدخال اسم المستخدم وكلمة المرور!")
 
