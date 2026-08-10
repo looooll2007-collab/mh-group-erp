@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 1. الثيمات وإعدادات الصفحة
+# 1. قائمة الثيمات وإعدادات الصفحة
 # ==========================================
 THEMES = {
     "الداكن الملكي والذهبي (Royal Dark & Gold)": {
@@ -23,6 +23,14 @@ THEMES = {
         "text": "#1E293B",
         "accent": "#6366F1",
         "border": "#E2E8F0",
+    },
+    "الأخضر الزمردي (Emerald Executive)": {
+        "primary": "#059669",
+        "bg": "#064E3B",
+        "card": "#047857",
+        "text": "#ECFDF5",
+        "accent": "#10B981",
+        "border": "#065F46",
     },
 }
 
@@ -44,7 +52,14 @@ if "login_config" not in st.session_state:
 if "selected_theme" not in st.session_state:
     st.session_state["selected_theme"] = "الداكن الملكي والذهبي (Royal Dark & Gold)"
 
-current_theme = THEMES[st.session_state["selected_theme"]]
+if "custom_theme_colors" not in st.session_state:
+    st.session_state["custom_theme_colors"] = THEMES["الداكن الملكي والذهبي (Royal Dark & Gold)"].copy()
+
+# تحديد الألوان الحالية للتطبيق
+if st.session_state["selected_theme"] == "تخصصي / مخصص (Custom Theme)":
+    current_theme = st.session_state["custom_theme_colors"]
+else:
+    current_theme = THEMES.get(st.session_state["selected_theme"], THEMES["الداكن الملكي والذهبي (Royal Dark & Gold)"])
 
 st.markdown(
     f"""
@@ -283,10 +298,11 @@ else:
     st.sidebar.markdown(f"**المستخدم:** `{st.session_state['username']}`\n\n**الصلاحية:** `{st.session_state['user_role']}`")
 
     role = st.session_state["user_role"]
-    allowed_pages = []
-
+    
+    # القوائم الأساسية حسب الصلاحيات
+    role_pages = []
     if role == "Admin":
-        allowed_pages = [
+        role_pages = [
             "📊 لوحة التحليلات والداشبورد",
             "⚙️ قسم إدارة المستخدمين والـ IP",
             "💰 قسم الإدارة المالية الشاملة",
@@ -296,15 +312,23 @@ else:
             "⏱️ قسم سجل العمليات والمراقبة (Audit Logs)"
         ]
     elif role == "Finance":
-        allowed_pages = ["💰 قسم الإدارة المالية الشاملة"]
+        role_pages = ["💰 قسم الإدارة المالية الشاملة"]
     elif role == "HR":
-        allowed_pages = ["👷 قسم الموارد البشرية والعمالة (HR)"]
+        role_pages = ["👷 قسم الموارد البشرية والعمالة (HR)"]
     elif role == "RealEstate":
-        allowed_pages = ["🏢 قسم العقارات والمخزون"]
+        role_pages = ["🏢 قسم العقارات والمخزون"]
     elif role == "Investor":
-        allowed_pages = ["🤝 قسم المستثمرين والأرباح"]
+        role_pages = ["🤝 قسم المستثمرين والأرباح"]
     else:
-        allowed_pages = ["📊 لوحة التحليلات والداشبورد"]
+        role_pages = ["📊 لوحة التحليلات والداشبورد"]
+
+    # إضافات عامة متاحة لجميع المستخدمين
+    common_pages = [
+        "👤 الملف الشخصي وإعدادات الحساب",
+        "🎨 إدارة الثيمات والألوان"
+    ]
+
+    allowed_pages = role_pages + common_pages
 
     selected_page = st.sidebar.radio("القائمة المتاحة لصلاحيتك:", allowed_pages)
 
@@ -319,8 +343,88 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
+    # 👤 قسم الملف الشخصي
+    if selected_page == "👤 الملف الشخصي وإعدادات الحساب":
+        st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
+        tab1, tab2 = st.tabs(["🔒 تغيير كلمة المرور والبيانات", "📜 سجل الجلسات الخاصة بي"])
+
+        with tab1:
+            curr_user = st.session_state["username"]
+            df_u = safe_read_sql("SELECT username, phone, role FROM users WHERE username = ?", (curr_user,))
+            
+            if not df_u.empty:
+                st.write(f"**اسم المستخدم:** `{df_u.iloc[0]['username']}`")
+                st.write(f"**الصلاحية الحالية:** `{df_u.iloc[0]['role']}`")
+                
+                with st.form("update_profile_form"):
+                    new_phone = st.text_input("رقم الهاتف الحالي", value=df_u.iloc[0]['phone'] or "")
+                    old_pw = st.text_input("كلمة المرور الحالية", type="password")
+                    new_pw = st.text_input("كلمة المرور الجديدة", type="password")
+                    confirm_pw = st.text_input("تأكيد كلمة المرور الجديدة", type="password")
+                    
+                    if st.form_submit_button("حفظ التحديثات"):
+                        with sqlite3.connect("mh_group_erp.db") as conn:
+                            cur = conn.cursor()
+                            cur.execute("SELECT password FROM users WHERE username = ?", (curr_user,))
+                            db_pw = cur.fetchone()[0]
+                            
+                            if old_pw != db_pw:
+                                st.error("كلمة المرور الحالية غير صحيحة!")
+                            elif new_pw and new_pw != confirm_pw:
+                                st.error("كلمتا المرور الجديدتان غير متطابقتين!")
+                            else:
+                                final_pw = new_pw if new_pw else db_pw
+                                cur.execute("UPDATE users SET password = ?, phone = ? WHERE username = ?", (final_pw, new_phone, curr_user))
+                                conn.commit()
+                                log_audit_action(curr_user, "الملف الشخصي", "تحديث بيانات الحساب/كلمة المرور")
+                                st.success("تم تحديث البيانات بنجاح!")
+                                st.rerun()
+
+        with tab2:
+            st.subheader("📜 كشف الجلسات الخاصة بـك")
+            df_my_sess = safe_read_sql("SELECT login_time, logout_time, ip_address, status FROM user_sessions WHERE username = ? ORDER BY id DESC", (st.session_state["username"],))
+            st.dataframe(df_my_sess, use_container_width=True)
+
+    # 🎨 قسم إدارة الثيمات والألوان
+    elif selected_page == "🎨 إدارة الثيمات والألوان":
+        st.markdown("<h1 class='main-header'>🎨 تخصيص ألوان وثيم المنظومة</h1>", unsafe_allow_html=True)
+        
+        theme_options = list(THEMES.keys()) + ["تخصصي / مخصص (Custom Theme)"]
+        selected_th = st.selectbox("اختر ثيم النظام:", theme_options, index=theme_options.index(st.session_state["selected_theme"]) if st.session_state["selected_theme"] in theme_options else 0)
+
+        if selected_th != st.session_state["selected_theme"]:
+            st.session_state["selected_theme"] = selected_th
+            st.rerun()
+
+        if selected_th == "تخصصي / مخصص (Custom Theme)":
+            st.subheader("🛠️ تخصيص الألوان المخصصة (Custom Theme Colors)")
+            
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                p_color = st.color_picker("اللون الرئيسي (Primary)", st.session_state["custom_theme_colors"]["primary"])
+                bg_color = st.color_picker("خلفية التطبيق (Background)", st.session_state["custom_theme_colors"]["bg"])
+            with c2:
+                card_color = st.color_picker("خلفية البطاقات والقائمة (Card/Sidebar)", st.session_state["custom_theme_colors"]["card"])
+                text_color = st.color_picker("لون النصوص (Text)", st.session_state["custom_theme_colors"]["text"])
+            with c3:
+                accent_color = st.color_picker("لون التمييز (Accent)", st.session_state["custom_theme_colors"]["accent"])
+                border_color = st.color_picker("لون الحدود (Border)", st.session_state["custom_theme_colors"]["border"])
+
+            if st.button("💾 تطبيق الثيم المخصص"):
+                st.session_state["custom_theme_colors"] = {
+                    "primary": p_color,
+                    "bg": bg_color,
+                    "card": card_color,
+                    "text": text_color,
+                    "accent": accent_color,
+                    "border": border_color,
+                }
+                log_audit_action(st.session_state["username"], "الثيمات", "تعديل الثيم المخصص بالنظام")
+                st.success("تم تطبيق الألوان المخصصة بنجاح!")
+                st.rerun()
+
     # 1️⃣ قسم المستخدمين والـ IP
-    if selected_page == "⚙️ قسم إدارة المستخدمين والـ IP":
+    elif selected_page == "⚙️ قسم إدارة المستخدمين والـ IP":
         st.markdown("<h1 class='main-header'>⚙️ إدارة المستخدمين وصلاحيات الدخول والـ IP</h1>", unsafe_allow_html=True)
         tab1, tab2, tab3 = st.tabs(["👥 الحسابات والصلاحيات", "➕ إضافة مستخدم جديد", "📡 إدارة سجل الجلسات وحذف الـ IP"])
 
@@ -506,7 +610,7 @@ else:
                         st.success("تم الحفظ!")
                         st.rerun()
 
-    # 5️⃣ قسم المستثمرين (مكتمل بالنماذج)
+    # 5️⃣ قسم المستثمرين
     elif selected_page == "🤝 قسم المستثمرين والأرباح":
         st.markdown("<h1 class='main-header'>🤝 قسم المستثمرين وحساب الأرباح</h1>", unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر جديد"])
