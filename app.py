@@ -420,6 +420,7 @@ else:
                     conn.execute("INSERT INTO department_files (department, filename, uploader, upload_date) VALUES (?, ?, ?, ?)",
                                  (dept_name, uploaded_file.name, st.session_state["username"], str(datetime.date.today())))
                     conn.commit()
+                log_audit_action(st.session_state["username"], dept_name, f"رفع مستند: {uploaded_file.name}")
                 st.success("تم رفع المستند/التقرير بنجاح!")
             
             st.write("#### المستندات والتقارير المرفوعة للقسم:")
@@ -440,13 +441,14 @@ else:
                         st.success("تم تسجيل الإبلاغ وإرساله بنجاح!")
 
     # ==========================================
-    # 📊 1. لوحة التحليلات التنفيذية (للأدمن فقط)
+    # 📊 1. لوحة التحليلات التنفيذية الشاملة (للأدمن فقط)
     # ==========================================
     if selected_page == "📊 لوحة التحليلات التنفيذية":
-        st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم</h1>", unsafe_allow_html=True)
-        st.markdown(f"👋 **مرحباً بك، {st.session_state['username']}**")
+        st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم التنفيذية الشاملة (جميع الأقسام)</h1>", unsafe_allow_html=True)
+        st.markdown(f"👋 **مرحباً بك يا مدير النظام، {st.session_state['username']}** - متابعة مركزية لبيانات وتقارير كافة الأقسام.")
 
-        df_fin = safe_read_sql("SELECT trans_type, amount FROM financial_transactions")
+        # استعلامات تجميعية شاملة لكل أقسام الشركة
+        df_fin = safe_read_sql("SELECT trans_type, amount, department FROM financial_transactions")
         tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
         tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
         net_prof = tot_inc - tot_exp
@@ -455,36 +457,89 @@ else:
         prop_val = df_props["price"].sum() if not df_props.empty else 0.0
         prop_count = len(df_props)
 
-        m1, m2, m3, m4, m5 = st.columns(5)
+        df_emp = safe_read_sql("SELECT workers_count, total_pay FROM employees")
+        total_workers = df_emp["workers_count"].sum() if not df_emp.empty and "workers_count" in df_emp.columns else len(df_emp)
+        total_payroll = df_emp["total_pay"].sum() if not df_emp.empty and "total_pay" in df_emp.columns else 0.0
+
+        df_inv = safe_read_sql("SELECT investment_amount, total_returns FROM investors")
+        total_investments = df_inv["investment_amount"].sum() if not df_inv.empty and "investment_amount" in df_inv.columns else 0.0
+
+        # مؤشرات الأداء العليا (Metrics)
+        m1, m2, m3, m4 = st.columns(4)
         with m1:
-            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حقيقي من النظام")
+            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حسابات المالية")
         with m2:
-            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="حقيقي من النظام")
+            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="حسابات المالية")
         with m3:
             st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م", delta="صافي العمليات")
         with m4:
-            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م", delta="إجمالي قيمة الأصول")
+            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م", delta=f"{prop_count} عقار مسجل")
+
+        m5, m6, m7, m8 = st.columns(4)
         with m5:
-            st.metric("العقارات المسجلة", f"{prop_count}", delta="عقار نشط")
+            st.metric("إجمالي الاستثمارات", f"{total_investments:,.0f} ج.م", delta="قسم المستثمرين")
+        with m6:
+            st.metric("إجمالي أجور العمالة", f"{total_payroll:,.0f} ج.م", delta="الموارد البشرية")
+        with m7:
+            st.metric("إجمالي العمال والكوادر", f"{total_workers}", delta="كادر العمل")
+        with m8:
+            st.metric("العقارات النشطة", f"{prop_count}", delta="مشاريع المجموعة")
 
         st.markdown("---")
 
-        c_chart, c_activity = st.columns([2, 1])
-        with c_chart:
-            st.subheader("📈 نظرة عامة على الأداء المالي")
-            if not df_fin.empty:
-                st.line_chart(df_fin, y="amount")
-            else:
-                st.info("لا توجد بيانات مالية كافية لعرض الرسم البياني حالياً.")
+        # تبويبات متقدمة لمراجعة بيانات كافة الأقسام من لوحة الأدمن مباشرة
+        tab_charts, tab_files, tab_tickets, tab_all_data = st.tabs([
+            "📈 التحليلات والرسوم البيانية", 
+            "📁 مستندات وتقارير الأقسام المرفوعة", 
+            "🛠️ إبلاغات ومشاكل الأقسام", 
+            "📋 جداول بيانات الأقسام الكاملة"
+        ])
 
-        with c_activity:
-            st.subheader("🔔 النشاط الأخير")
-            df_logs = safe_read_sql("SELECT action, timestamp FROM audit_logs ORDER BY id DESC LIMIT 5")
-            if not df_logs.empty:
-                for idx, row in df_logs.iterrows():
-                    st.markdown(f"- **{row['action']}**  \n  <small style='color: gray;'>{row['timestamp']}</small>", unsafe_allow_html=True)
+        with tab_charts:
+            c_chart, c_activity = st.columns([2, 1])
+            with c_chart:
+                st.subheader("📈 نظرة عامة على الأداء المالي")
+                if not df_fin.empty:
+                    st.line_chart(df_fin, y="amount")
+                else:
+                    st.info("لا توجد بيانات مالية كافية لعرض الرسم البياني حالياً.")
+
+            with c_activity:
+                st.subheader("🔔 النشاط الأخير والعمليات")
+                df_logs = safe_read_sql("SELECT action, timestamp FROM audit_logs ORDER BY id DESC LIMIT 5")
+                if not df_logs.empty:
+                    for idx, row in df_logs.iterrows():
+                        st.markdown(f"- **{row['action']}**  \n  <small style='color: gray;'>{row['timestamp']}</small>", unsafe_allow_html=True)
+                else:
+                    st.info("لا توجد أنشطة مسجلة حديثاً.")
+
+        with tab_files:
+            st.subheader("📁 جميع التقارير والمستندات المرفوعة بواسطة الأقسام")
+            df_all_files = safe_read_sql("SELECT department, filename, uploader, upload_date FROM department_files ORDER BY id DESC")
+            if not df_all_files.empty:
+                st.dataframe(df_all_files, use_container_width=True)
             else:
-                st.info("لا توجد أنشطة مسجلة حديثاً.")
+                st.info("لم يتم رفع أي مستندات أو تقارير من الأقسام حتى الآن.")
+
+        with tab_tickets:
+            st.subheader("🛠️ إبلاغات ومشاكل الأقسام المسجلة")
+            df_all_tickets = safe_read_sql("SELECT id, username, department, issue_text, status, ticket_date FROM support_tickets ORDER BY id DESC")
+            if not df_all_tickets.empty:
+                st.dataframe(df_all_tickets, use_container_width=True)
+            else:
+                st.info("لا توجد إبلاغات أو أعطال مسجلة من الأقسام.")
+
+        with tab_all_data:
+            st.subheader("📋 تفاصيل بيانات الأقسام التشغيلية")
+            sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["العقارات والمشاريع", "الموارد البشرية والعمال", "المستثمرين", "المعاملات المالية"])
+            with sub_t1:
+                st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
+            with sub_t2:
+                st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
+            with sub_t3:
+                st.dataframe(safe_read_sql("SELECT * FROM investors"), use_container_width=True)
+            with sub_t4:
+                st.dataframe(safe_read_sql("SELECT * FROM financial_transactions"), use_container_width=True)
 
     # ==========================================
     # 👤 الملف الشخصي
@@ -629,6 +684,7 @@ else:
                                 conn.execute("INSERT INTO financial_transactions (trans_type, department, amount, description, trans_date) VALUES (?, ?, ?, ?, ?)",
                                              (ttype, tdept, tamt, tdesc, str(datetime.date.today())))
                                 conn.commit()
+                            log_audit_action(st.session_state["username"], "الإدارة المالية", f"إضافة معاملة بقيمة {tamt}")
                             st.success("تم الحفظ بنجاح!")
                             st.rerun()
             with t2:
@@ -660,6 +716,7 @@ else:
                                 conn.execute("INSERT INTO employees (custom_id, name, emp_type, craft_type, hourly_rate, daily_rate, workers_count, total_pay, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                              (cid, ename, etype, ctype, hrate, drate, wcnt, tot, str(datetime.date.today())))
                                 conn.commit()
+                            log_audit_action(st.session_state["username"], "الموارد البشرية", f"إضافة موظف/عامل: {ename}")
                             st.success("تم الحفظ!")
                             st.rerun()
 
@@ -687,6 +744,7 @@ else:
                                 conn.execute("INSERT INTO properties (custom_id, name, location, price, expenses, sale_price, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
                                              (pid, pname, ploc, pprice, pexp, psale, "متاح"))
                                 conn.commit()
+                            log_audit_action(st.session_state["username"], "العقارات والمشاريع", f"إضافة عقار: {pname}")
                             st.success("تم الحفظ!")
                             st.rerun()
 
@@ -716,13 +774,14 @@ else:
                                 conn.execute("INSERT INTO investors (name, property_custom_id, investment_amount, investment_ratio, return_rate, total_returns, start_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
                                              (inv_name, prop_id, inv_amt, inv_ratio, return_rate, tot_returns, str(datetime.date.today())))
                                 conn.commit()
+                            log_audit_action(st.session_state["username"], "المستثمرين", f"إضافة مستثمر: {inv_name}")
                             st.success("تم الحفظ!")
                             st.rerun()
 
         render_department_workspace("المستثمرين", investors_core)
 
     # ==========================================
-    # ⏱️ سجل العمليات (خاص بالأدمن)
+    # ⏱️ سجل العمليات
     # ==========================================
     elif selected_page == "⏱️ سجل العمليات":
         st.markdown("<h1 class='main-header'>⏱️ سجل العمليات والأنشطة (Audit Trail)</h1>", unsafe_allow_html=True)
