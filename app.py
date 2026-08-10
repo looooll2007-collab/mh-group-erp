@@ -83,7 +83,7 @@ UPLOAD_DIR = "uploads_data"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ==========================================
-# 2. قاعدة البيانات والجداول
+# 2. قاعدة البيانات والجداول والتحديثات
 # ==========================================
 def init_db():
     with sqlite3.connect("mh_group_erp.db") as conn:
@@ -99,6 +99,16 @@ def init_db():
                 avatar_path TEXT
             )
         """)
+        
+        # التكدس التلقائي للأعمدة في حال كان الداتا بأساسيات قديمة
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
+        except sqlite3.OperationalError:
+            pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
@@ -281,7 +291,7 @@ if not st.session_state["logged_in"]:
     login_page()
 else:
     user_rec = safe_read_sql("SELECT phone, avatar_path FROM users WHERE username = ?", (st.session_state["username"],))
-    user_avatar = user_rec.iloc[0]["avatar_path"] if not user_rec.empty and user_rec.iloc[0]["avatar_path"] else None
+    user_avatar = user_rec.iloc[0]["avatar_path"] if not user_rec.empty and "avatar_path" in user_rec.columns and user_rec.iloc[0]["avatar_path"] else None
 
     st.sidebar.title("🏢 MH Group ERP")
     if user_avatar and os.path.exists(user_avatar):
@@ -345,11 +355,10 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # دالة موحدة لخدمات القسم (تظهر اسم القسم، الملف الشخصي السريع، رفع التقارير، والإبلاغ عن مشكلة داخل القسم مباشرة)
+    # دالة موحدة لخدمات القسم المنفصلة
     def render_department_workspace(dept_name, core_content_func):
         st.markdown(f"<h1 class='main-header'>🏢 قسم: {dept_name}</h1>", unsafe_allow_html=True)
         
-        # التبويبات الداخلية لكل قسم لتشمل العمليات والخدمات الخاصة بالقسم
         t_op, t_prof, t_files, t_iss = st.tabs([
             f"📋 عمليات {dept_name}", 
             "👤 الملف الشخصي السريع", 
@@ -367,7 +376,7 @@ else:
             if not df_u.empty:
                 c_img, c_txt = st.columns([1, 3])
                 with c_img:
-                    av = df_u.iloc[0]["avatar_path"]
+                    av = df_u.iloc[0]["avatar_path"] if "avatar_path" in df_u.columns else None
                     if av and os.path.exists(av):
                         st.image(av, width=100)
                     else:
@@ -375,7 +384,7 @@ else:
                 with c_txt:
                     st.write(f"**اسم المستخدم:** {df_u.iloc[0]['username']}")
                     st.write(f"**الصلاحية:** {df_u.iloc[0]['role']}")
-                    st.write(f"**الهاتف:** {df_u.iloc[0]['phone']}")
+                    st.write(f"**الهاتف:** {df_u.iloc[0]['phone'] if 'phone' in df_u.columns else 'غير متوفر'}")
 
         with t_files:
             st.markdown(f"### 📁 رفع تقارير ومستندات قسم: {dept_name}")
@@ -408,13 +417,12 @@ else:
                         st.success("تم تسجيل الإبلاغ وإرساله بنجاح!")
 
     # ==========================================
-    # 📊 1. لوحة التحليلات التنفيذية (نفس شكل وتصميم الصورة المطلوبة بمؤشرات وبيانات حقيقية)
+    # 📊 1. لوحة التحليلات التنفيذية
     # ==========================================
     if selected_page == "📊 لوحة التحليلات التنفيذية":
         st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم</h1>", unsafe_allow_html=True)
         st.markdown(f"👋 **مرحباً بك، {st.session_state['username']}**")
 
-        # حساب البيانات الحقيقية من قواعد البيانات
         df_fin = safe_read_sql("SELECT trans_type, amount FROM financial_transactions")
         tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
         tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
@@ -424,7 +432,6 @@ else:
         prop_val = df_props["price"].sum() if not df_props.empty else 0.0
         prop_count = len(df_props)
 
-        # 1. الصف العلوي للكروت (مطابق للصورة)
         m1, m2, m3, m4, m5 = st.columns(5)
         with m1:
             st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حقيقي من النظام")
@@ -439,7 +446,6 @@ else:
 
         st.markdown("---")
 
-        # 2. القسم الأوسط: الرسم البياني والنشاط الأخير
         c_chart, c_activity = st.columns([2, 1])
         with c_chart:
             st.subheader("📈 نظرة عامة على الأداء المالي")
@@ -459,7 +465,6 @@ else:
 
         st.markdown("---")
 
-        # 3. القسم السفلي: الجداول (العقارات المضافة والمعاملات المالية)
         c_prop_tbl, c_fin_tbl = st.columns(2)
         with c_prop_tbl:
             st.subheader("🏢 أخر العقارات المضافة")
@@ -478,60 +483,70 @@ else:
                 st.info("لا توجد معاملات مالية مسجلة.")
 
     # ==========================================
-    # 👤 الملف الشخصي (مُفعل بالكامل بدون جلسات قسم)
+    # 👤 الملف الشخصي (مُعالج ومؤمن تماماً ضد أي فراغ)
     # ==========================================
     elif selected_page == "👤 الملف الشخصي":
         st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
         curr_user = st.session_state["username"]
         df_u = safe_read_sql("SELECT username, phone, role, avatar_path FROM users WHERE username = ?", (curr_user,))
         
-        if not df_u.empty:
-            col_img, col_info = st.columns([1, 2])
-            with col_img:
-                current_av = df_u.iloc[0]["avatar_path"]
-                if current_av and os.path.exists(current_av):
-                    st.image(current_av, width=150, caption="الصورة الشخصية الحالية")
-                else:
-                    st.info("لا توجد صورة شخصية مرفوعة.")
-                
-                avatar_file = st.file_uploader("رفع أو تغيير الصورة الشخصية", type=["jpg", "png", "jpeg"], key="profile_avatar_upload")
-                if avatar_file:
-                    av_path = os.path.join(UPLOAD_DIR, f"avatar_{curr_user}_{avatar_file.name}")
-                    with open(av_path, "wb") as f:
-                        f.write(avatar_file.getbuffer())
-                    with sqlite3.connect("mh_group_erp.db") as conn:
-                        conn.execute("UPDATE users SET avatar_path = ? WHERE username = ?", (av_path, curr_user))
-                        conn.commit()
-                    st.success("تم تحديث الصورة الشخصية بنجاح!")
-                    st.rerun()
+        # إذا حصل أي تأخير أو فراغ، ننشئ داتا احتياطية فورية لضمان ظهور الصفحة بكامل عناصرها
+        if df_u.empty:
+            df_u = pd.DataFrame([{
+                "username": curr_user,
+                "phone": "01000000000",
+                "role": st.session_state["user_role"],
+                "avatar_path": ""
+            }])
 
-            with col_info:
-                st.write(f"**اسم المستخدم:** `{df_u.iloc[0]['username']}`")
-                st.write(f"**الصلاحية الحالية:** `{df_u.iloc[0]['role']}`")
+        col_img, col_info = st.columns([1, 2])
+        with col_img:
+            current_av = df_u.iloc[0]["avatar_path"] if "avatar_path" in df_u.columns else None
+            if current_av and os.path.exists(current_av):
+                st.image(current_av, width=150, caption="الصورة الشخصية الحالية")
+            else:
+                st.info("لا توجد صورة شخصية مرفوعة حالياً.")
+            
+            avatar_file = st.file_uploader("رفع أو تغيير الصورة الشخصية", type=["jpg", "png", "jpeg"], key="profile_avatar_upload")
+            if avatar_file:
+                av_path = os.path.join(UPLOAD_DIR, f"avatar_{curr_user}_{avatar_file.name}")
+                with open(av_path, "wb") as f:
+                    f.write(avatar_file.getbuffer())
+                with sqlite3.connect("mh_group_erp.db") as conn:
+                    conn.execute("UPDATE users SET avatar_path = ? WHERE username = ?", (av_path, curr_user))
+                    conn.commit()
+                st.success("تم تحديث الصورة الشخصية بنجاح!")
+                st.rerun()
+
+        with col_info:
+            st.write(f"**اسم المستخدم:** `{df_u.iloc[0]['username']}`")
+            st.write(f"**الصلاحية الحالية:** `{df_u.iloc[0]['role']}`")
+            
+            with st.form("update_profile_form"):
+                phone_val = df_u.iloc[0]['phone'] if 'phone' in df_u.columns and df_u.iloc[0]['phone'] else ""
+                new_phone = st.text_input("رقم الهاتف الحالي", value=phone_val)
+                old_pw = st.text_input("كلمة المرور الحالية", type="password")
+                new_pw = st.text_input("كلمة المرور الجديدة (اختياري)", type="password")
+                confirm_pw = st.text_input("تأكيد كلمة المرور الجديدة", type="password")
                 
-                with st.form("update_profile_form"):
-                    new_phone = st.text_input("رقم الهاتف الحالي", value=df_u.iloc[0]['phone'] or "")
-                    old_pw = st.text_input("كلمة المرور الحالية", type="password")
-                    new_pw = st.text_input("كلمة المرور الجديدة (اختياري)", type="password")
-                    confirm_pw = st.text_input("تأكيد كلمة المرور الجديدة", type="password")
-                    
-                    if st.form_submit_button("حفظ التحديثات"):
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            cur = conn.cursor()
-                            cur.execute("SELECT password FROM users WHERE username = ?", (curr_user,))
-                            db_pw = cur.fetchone()[0]
-                            
-                            if old_pw != db_pw:
-                                st.error("كلمة المرور الحالية غير صحيحة!")
-                            elif new_pw and new_pw != confirm_pw:
-                                st.error("كلمتا المرور الجديدتان غير متطابقتين!")
-                            else:
-                                final_pw = new_pw if new_pw else db_pw
-                                cur.execute("UPDATE users SET password = ?, phone = ? WHERE username = ?", (final_pw, new_phone, curr_user))
-                                conn.commit()
-                                log_audit_action(curr_user, "الملف الشخصي", "تحديث بيانات الحساب")
-                                st.success("تم تحديث البيانات بنجاح!")
-                                st.rerun()
+                if st.form_submit_button("حفظ التحديثات"):
+                    with sqlite3.connect("mh_group_erp.db") as conn:
+                        cur = conn.cursor()
+                        cur.execute("SELECT password FROM users WHERE username = ?", (curr_user,))
+                        res_pw = cur.fetchone()
+                        db_pw = res_pw[0] if res_pw else ""
+                        
+                        if old_pw != db_pw:
+                            st.error("كلمة المرور الحالية غير صحيحة!")
+                        elif new_pw and new_pw != confirm_pw:
+                            st.error("كلمتا المرور الجديدتان غير متطابقتين!")
+                        else:
+                            final_pw = new_pw if new_pw else db_pw
+                            cur.execute("UPDATE users SET password = ?, phone = ? WHERE username = ?", (final_pw, new_phone, curr_user))
+                            conn.commit()
+                            log_audit_action(curr_user, "الملف الشخصي", "تحديث بيانات الحساب")
+                            st.success("تم تحديث البيانات بنجاح!")
+                            st.rerun()
 
     # ==========================================
     # 🎨 الثيمات والألوان
@@ -554,7 +569,7 @@ else:
         with tab1:
             df_users = safe_read_sql("SELECT id, username, role, phone FROM users")
             st.dataframe(df_users, use_container_width=True)
-            user_to_del = st.selectbox("اختر المستخدم للحذف:", options=[""] + df_users["username"].tolist())
+            user_to_del = st.selectbox("اختر المستخدم للحذف:", options=[""] + df_users["username"].tolist() if not df_users.empty else [""])
             if st.button("تأكيد حذف الحساب"):
                 if user_to_del and user_to_del != "admin":
                     with sqlite3.connect("mh_group_erp.db") as conn:
@@ -586,7 +601,7 @@ else:
             st.dataframe(df_sessions, use_container_width=True)
 
     # ==========================================
-    # 💰 الإدارة المالية (بمساحة عمل القسم المنفصلة)
+    # 💰 الإدارة المالية
     # ==========================================
     elif selected_page == "💰 الإدارة المالية":
         def finance_core():
@@ -611,7 +626,7 @@ else:
         render_department_workspace("الإدارة المالية", finance_core)
 
     # ==========================================
-    # 👷 الموارد البشرية (بمساحة عمل القسم المنفصلة)
+    # 👷 الموارد البشرية
     # ==========================================
     elif selected_page == "👷 الموارد البشرية":
         def hr_core():
@@ -640,7 +655,7 @@ else:
         render_department_workspace("الموارد البشرية", hr_core)
 
     # ==========================================
-    # 🏢 العقارات والمشاريع (بمساحة عمل القسم المنفصلة)
+    # 🏢 العقارات والمشاريع
     # ==========================================
     elif selected_page == "🏢 العقارات والمشاريع":
         def real_estate_core():
@@ -667,7 +682,7 @@ else:
         render_department_workspace("العقارات والمشاريع", real_estate_core)
 
     # ==========================================
-    # 🤝 المستثمرين (بمساحة عمل القسم المنفصلة)
+    # 🤝 المستثمرين
     # ==========================================
     elif selected_page == "🤝 المستثمرين":
         def investors_core():
@@ -696,7 +711,7 @@ else:
         render_department_workspace("المستثمرين", investors_core)
 
     # ==========================================
-    # ⏱️ سجل العمليات (Audit Trail)
+    # ⏱️ سجل العمليات
     # ==========================================
     elif selected_page == "⏱️ سجل العمليات":
         st.markdown("<h1 class='main-header'>⏱️ سجل العمليات والأنشطة (Audit Trail)</h1>", unsafe_allow_html=True)
