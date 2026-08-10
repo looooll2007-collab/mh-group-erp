@@ -288,22 +288,16 @@ else:
         st.sidebar.image(user_avatar, width=80)
     st.sidebar.markdown(f"**المستخدم:** `{st.session_state['username']}`\n\n**الصلاحية:** `{st.session_state['user_role']}`")
 
-    # تحديد الصلاحيات والقوائم حسب دور المستخدم
     role = st.session_state["user_role"]
-
     allowed_pages = ["📊 لوحة التحليلات التنفيذية"]
 
     if role == "Admin":
         allowed_pages.extend([
             "⚙️ المستخدمون والجلسات والـ IP",
             "💰 الإدارة المالية",
-            "📌 لوحة خدمات الإدارة المالية",
             "👷 الموارد البشرية",
-            "📌 لوحة خدمات الموارد البشرية",
             "🏢 العقارات والمشاريع",
-            "📌 لوحة خدمات العقارات والمشاريع",
             "🤝 المستثمرين",
-            "📌 لوحة خدمات المستثمرين",
             "⏱️ سجل العمليات",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
@@ -355,10 +349,9 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # دالة لتقديم صفحة خدمات القسم المستقلة من القائمة الجانبية
-    def render_department_service_page(dept_name):
-        st.markdown(f"<h1 class='main-header'>📌 لوحة خدمات قسم: {dept_name}</h1>", unsafe_allow_html=True)
-        
+    # دالة موحدة لخدمات القسم (تستخدم للمستخدمين العاديين، أو كـ تبويب داخل أقسام الأدمن)
+    def render_department_services_content(dept_name):
+        st.markdown(f"### 📌 لوحة خدمات وتسهيلات قسم: {dept_name}")
         t1, t2, t3 = st.tabs(["👤 الملف الشخصي السريع", "📁 رفع تقارير ومستندات القسم", "🛠️ الإبلاغ عن مشكلة بالقسم"])
         
         with t1:
@@ -378,7 +371,7 @@ else:
                     st.write(f"**الهاتف:** {df_u.iloc[0]['phone']}")
 
         with t2:
-            uploaded_file = st.file_uploader(f"رفع مستند أو تقرير جديد لـ {dept_name}", key=f"up_{dept_name}")
+            uploaded_file = st.file_uploader(f"رفع مستند أو تقرير جديد لـ {dept_name}", key=f"up_{dept_name}_{random.randint(1,1000)}")
             if uploaded_file:
                 filepath = os.path.join(UPLOAD_DIR, uploaded_file.name)
                 with open(filepath, "wb") as f:
@@ -394,7 +387,7 @@ else:
             st.dataframe(df_files, use_container_width=True)
 
         with t3:
-            with st.form(f"issue_form_{dept_name}"):
+            with st.form(f"issue_form_{dept_name}_{random.randint(1,1000)}"):
                 issue_desc = st.text_area("تفاصيل المشكلة أو العطل التقني في القسم")
                 if st.form_submit_button("إرسال الإبلاغ للإدارة"):
                     if issue_desc:
@@ -423,49 +416,18 @@ else:
 
         m1, m2, m3, m4, m5 = st.columns(5)
         with m1:
-            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", "12.5%+ عن الشهر الماضي")
+            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م")
         with m2:
-            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", "3.2%- عن الشهر الماضي")
+            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م")
         with m3:
-            st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م", "18.7%+ عن الشهر الماضي")
+            st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م")
         with m4:
-            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م", "إجمالي المحفظة العقارية")
+            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م")
         with m5:
-            st.metric("العقارات المسجلة", f"{prop_count}", "عقار مسجل بالنظام")
-
-        st.markdown("---")
-
-        col_l, col_m, col_r = st.columns([2, 1.2, 1.2])
-        with col_l:
-            st.subheader("📈 نظرة عامة على الأداء")
-            chart_data = pd.DataFrame({
-                "الشهر": ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو"],
-                "الإيرادات": [5000000, 6200000, 5800000, 7100000, 6900000, 7400000, tot_inc if tot_inc>0 else 8250000],
-                "المصروفات": [2100000, 2300000, 2200000, 2500000, 2700000, 2600000, tot_exp if tot_exp>0 else 2850000],
-                "الأرباح": [2900000, 3900000, 3600000, 4600000, 4200000, 4800000, net_prof if net_prof!=0 else 5400000]
-            })
-            st.line_chart(chart_data.set_index("الشهر"))
-
-        with col_m:
-            st.subheader("🍩 توزيع المصروفات")
-            exp_dist = pd.DataFrame({
-                "الفئة": ["شراء عقارات", "مصاريف تطوير", "مصاريف إدارية", "رواتب وأجور", "أخرى"],
-                "النسبة": [40, 25, 15, 10, 10]
-            })
-            st.bar_chart(exp_dist.set_index("الفئة"))
-            st.caption(f"إجمالي المصروفات الحالية: {tot_exp:,.0f} ج.م")
-
-        with col_r:
-            st.subheader("⚡ النشاط الأخير")
-            df_logs_recent = safe_read_sql("SELECT action, timestamp FROM audit_logs ORDER BY id DESC LIMIT 5")
-            if not df_logs_recent.empty:
-                for _, row in df_logs_recent.iterrows():
-                    st.markdown(f"🔹 **{row['action']}**\n<small style='color:gray;'>{row['timestamp']}</small>", unsafe_allow_html=True)
-            else:
-                st.info("لا توجد أنشطة مسجلة حديثاً.")
+            st.metric("العقارات المسجلة", f"{prop_count}")
 
     # ==========================================
-    # 👤 الملف الشخصي (مُصحح تماماً)
+    # 👤 الملف الشخصي (مُفعل بالكامل)
     # ==========================================
     elif selected_page == "👤 الملف الشخصي":
         st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
@@ -571,139 +533,222 @@ else:
             st.subheader("📡 سجل الجلسات النشطة وإدارة الـ IPs")
             df_sessions = safe_read_sql("SELECT * FROM user_sessions ORDER BY id DESC")
             st.dataframe(df_sessions, use_container_width=True)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                sess_id_del = st.number_input("أدخل ID الجلسة لحذفها:", min_value=1, step=1)
-                if st.button("حذف الجلسة النشطة"):
-                    with sqlite3.connect("mh_group_erp.db") as conn:
-                        conn.execute("DELETE FROM user_sessions WHERE id = ?", (sess_id_del,))
-                        conn.commit()
-                    st.success("تم حذف الجلسة بنجاح!")
-                    st.rerun()
-            with c2:
-                ip_to_del = st.text_input("أدخل IP للمسح الشامل:")
-                if st.button("مسح سجلات الـ IP"):
-                    if ip_to_del:
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            conn.execute("DELETE FROM user_sessions WHERE ip_address = ?", (ip_to_del,))
-                            conn.commit()
-                        st.success("تم مسح السجلات بنجاح!")
-                        st.rerun()
 
     # ==========================================
-    # 💰 الإدارة المالية
+    # 💰 الإدارة المالية (شاملة خدمات القسم للأدمن)
     # ==========================================
     elif selected_page == "💰 الإدارة المالية":
-        st.markdown("<h1 class='main-header'>💰 الإدارة المالية وحاسبة المستحقات والعمالة</h1>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["💸 تسجيل المصروفات والإيرادات", "📜 كشف الحسابات"])
-        with tab1:
-            with st.form("fin_form"):
-                ttype = st.selectbox("نوع المعاملة", ["صادرات (مصروفات)", "واردات (إيرادات)"])
-                tdept = st.selectbox("القسم التابع له", ["العقارات", "الموارد البشرية", "المستثمرين", "عام"])
-                tamt = st.number_input("المبلغ (EGP)", min_value=0.0)
-                tdesc = st.text_input("الوصف / البيان")
-                if st.form_submit_button("حفظ المعاملة"):
-                    if tamt > 0:
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            conn.execute("INSERT INTO financial_transactions (trans_type, department, amount, description, trans_date) VALUES (?, ?, ?, ?, ?)",
-                                         (ttype, tdept, tamt, tdesc, str(datetime.date.today())))
-                            conn.commit()
-                        st.success("تم الحفظ بنجاح!")
-                        st.rerun()
-        with tab2:
-            st.dataframe(safe_read_sql("SELECT * FROM financial_transactions ORDER BY id DESC"), use_container_width=True)
+        st.markdown("<h1 class='main-header'>💰 الإدارة المالية</h1>", unsafe_allow_html=True)
+        if role == "Admin":
+            tab_main, tab_serv = st.tabs(["📊 عمليات القسم المالية", "📌 لوحة خدمات الإدارة المالية"])
+            with tab_main:
+                t1, t2 = st.tabs(["💸 تسجيل المصروفات والإيرادات", "📜 كشف الحسابات"])
+                with t1:
+                    with st.form("fin_form"):
+                        ttype = st.selectbox("نوع المعاملة", ["صادرات (مصروفات)", "واردات (إيرادات)"])
+                        tdept = st.selectbox("القسم التابع له", ["العقارات", "الموارد البشرية", "المستثمرين", "عام"])
+                        tamt = st.number_input("المبلغ (EGP)", min_value=0.0)
+                        tdesc = st.text_input("الوصف / البيان")
+                        if st.form_submit_button("حفظ المعاملة"):
+                            if tamt > 0:
+                                with sqlite3.connect("mh_group_erp.db") as conn:
+                                    conn.execute("INSERT INTO financial_transactions (trans_type, department, amount, description, trans_date) VALUES (?, ?, ?, ?, ?)",
+                                                 (ttype, tdept, tamt, tdesc, str(datetime.date.today())))
+                                    conn.commit()
+                                st.success("تم الحفظ بنجاح!")
+                                st.rerun()
+                with t2:
+                    st.dataframe(safe_read_sql("SELECT * FROM financial_transactions ORDER BY id DESC"), use_container_width=True)
+            with tab_serv:
+                render_department_services_content("الإدارة المالية")
+        else:
+            t1, t2 = st.tabs(["💸 تسجيل المصروفات والإيرادات", "📜 كشف الحسابات"])
+            with t1:
+                with st.form("fin_form_user"):
+                    ttype = st.selectbox("نوع المعاملة", ["صادرات (مصروفات)", "واردات (إيرادات)"])
+                    tdept = st.selectbox("القسم التابع له", ["العقارات", "الموارد البشرية", "المستثمرين", "عام"])
+                    tamt = st.number_input("المبلغ (EGP)", min_value=0.0)
+                    tdesc = st.text_input("الوصف / البيان")
+                    if st.form_submit_button("حفظ المعاملة"):
+                        if tamt > 0:
+                            with sqlite3.connect("mh_group_erp.db") as conn:
+                                conn.execute("INSERT INTO financial_transactions (trans_type, department, amount, description, trans_date) VALUES (?, ?, ?, ?, ?)",
+                                             (ttype, tdept, tamt, tdesc, str(datetime.date.today())))
+                                conn.commit()
+                            st.success("تم الحفظ بنجاح!")
+                            st.rerun()
+            with t2:
+                st.dataframe(safe_read_sql("SELECT * FROM financial_transactions ORDER BY id DESC"), use_container_width=True)
 
     elif selected_page == "📌 لوحة خدمات الإدارة المالية":
-        render_department_service_page("الإدارة المالية")
+        render_department_services_content("الإدارة المالية")
 
     # ==========================================
-    # 👷 الموارد البشرية
+    # 👷 الموارد البشرية (شاملة خدمات القسم للأدمن)
     # ==========================================
     elif selected_page == "👷 الموارد البشرية":
         st.markdown("<h1 class='main-header'>👷 قسم الموارد البشرية والعمالة</h1>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["📋 سجل الكادر", "➕ إضافة كادر"])
-        with tab1:
-            st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
-        with tab2:
-            with st.form("add_emp_form"):
-                cid = st.text_input("ID الفريد", value=f"EMP-{random.randint(1000, 9999)}")
-                ename = st.text_input("اسم العامل / الموظف")
-                etype = st.selectbox("الفئة", ["موظف ثابت", "مورد عمال", "عامل مستقل"])
-                ctype = st.selectbox("التخصص", ["نقاش", "نحات", "عامل", "مشرف", "إداري"])
-                hrate = st.number_input("سعر الساعة", min_value=0.0)
-                drate = st.number_input("سعر اليومية", min_value=0.0)
-                wcnt = st.number_input("عدد العمال", min_value=1, value=1)
-                tot = (hrate * 8 * wcnt) if hrate > 0 else (drate * wcnt)
-                if st.form_submit_button("حفظ البيانات"):
-                    if ename:
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            conn.execute("INSERT INTO employees (custom_id, name, emp_type, craft_type, hourly_rate, daily_rate, workers_count, total_pay, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                         (cid, ename, etype, ctype, hrate, drate, wcnt, tot, str(datetime.date.today())))
-                            conn.commit()
-                        st.success("تم الحفظ!")
-                        st.rerun()
+        if role == "Admin":
+            tab_main, tab_serv = st.tabs(["📋 سجل الكادر والعمالة", "📌 لوحة خدمات الموارد البشرية"])
+            with tab_main:
+                t1, t2 = st.tabs(["📋 سجل الكادر", "➕ إضافة كادر"])
+                with t1:
+                    st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
+                with t2:
+                    with st.form("add_emp_form"):
+                        cid = st.text_input("ID الفريد", value=f"EMP-{random.randint(1000, 9999)}")
+                        ename = st.text_input("اسم العامل / الموظف")
+                        etype = st.selectbox("الفئة", ["موظف ثابت", "مورد عمال", "عامل مستقل"])
+                        ctype = st.selectbox("التخصص", ["نقاش", "نحات", "عامل", "مشرف", "إداري"])
+                        hrate = st.number_input("سعر الساعة", min_value=0.0)
+                        drate = st.number_input("سعر اليومية", min_value=0.0)
+                        wcnt = st.number_input("عدد العمال", min_value=1, value=1)
+                        tot = (hrate * 8 * wcnt) if hrate > 0 else (drate * wcnt)
+                        if st.form_submit_button("حفظ البيانات"):
+                            if ename:
+                                with sqlite3.connect("mh_group_erp.db") as conn:
+                                    conn.execute("INSERT INTO employees (custom_id, name, emp_type, craft_type, hourly_rate, daily_rate, workers_count, total_pay, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                                 (cid, ename, etype, ctype, hrate, drate, wcnt, tot, str(datetime.date.today())))
+                                    conn.commit()
+                                st.success("تم الحفظ!")
+                                st.rerun()
+            with tab_serv:
+                render_department_services_content("الموارد البشرية")
+        else:
+            t1, t2 = st.tabs(["📋 سجل الكادر", "➕ إضافة كادر"])
+            with t1:
+                st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
+            with t2:
+                with st.form("add_emp_form_user"):
+                    cid = st.text_input("ID الفريد", value=f"EMP-{random.randint(1000, 9999)}")
+                    ename = st.text_input("اسم العامل / الموظف")
+                    etype = st.selectbox("الفئة", ["موظف ثابت", "مورد عمال", "عامل مستقل"])
+                    ctype = st.selectbox("التخصص", ["نقاش", "نحات", "عامل", "مشرف", "إداري"])
+                    hrate = st.number_input("سعر الساعة", min_value=0.0)
+                    drate = st.number_input("سعر اليومية", min_value=0.0)
+                    wcnt = st.number_input("عدد العمال", min_value=1, value=1)
+                    tot = (hrate * 8 * wcnt) if hrate > 0 else (drate * wcnt)
+                    if st.form_submit_button("حفظ البيانات"):
+                        if ename:
+                            with sqlite3.connect("mh_group_erp.db") as conn:
+                                conn.execute("INSERT INTO employees (custom_id, name, emp_type, craft_type, hourly_rate, daily_rate, workers_count, total_pay, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                             (cid, ename, etype, ctype, hrate, drate, wcnt, tot, str(datetime.date.today())))
+                                conn.commit()
+                            st.success("تم الحفظ!")
+                            st.rerun()
 
     elif selected_page == "📌 لوحة خدمات الموارد البشرية":
-        render_department_service_page("الموارد البشرية")
+        render_department_services_content("الموارد البشرية")
 
     # ==========================================
-    # 🏢 العقارات والمشاريع
+    # 🏢 العقارات والمشاريع (شاملة خدمات القسم للأدمن)
     # ==========================================
     elif selected_page == "🏢 العقارات والمشاريع":
         st.markdown("<h1 class='main-header'>🏢 قسم إدارة العقارات والمشاريع</h1>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["📋 العقارات المسجلة", "➕ إضافة عقار"])
-        with tab1:
-            st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
-        with tab2:
-            with st.form("add_prop_f"):
-                pid = st.text_input("ID العقار", value=f"PROP-{random.randint(100, 999)}")
-                pname = st.text_input("اسم المشروع / العقار")
-                ploc = st.text_input("الموقع")
-                pprice = st.number_input("سعر الشراء", min_value=0.0)
-                pexp = st.number_input("المصروفات", min_value=0.0)
-                psale = st.number_input("سعر البيع المتوقع", min_value=0.0)
-                if st.form_submit_button("حفظ العقار"):
-                    if pname:
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            conn.execute("INSERT INTO properties (custom_id, name, location, price, expenses, sale_price, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                         (pid, pname, ploc, pprice, pexp, psale, "متاح"))
-                            conn.commit()
-                        st.success("تم الحفظ!")
-                        st.rerun()
+        if role == "Admin":
+            tab_main, tab_serv = st.tabs(["📋 العقارات والمشاريع", "📌 لوحة خدمات العقارات والمشاريع"])
+            with tab_main:
+                t1, t2 = st.tabs(["📋 العقارات المسجلة", "➕ إضافة عقار"])
+                with t1:
+                    st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
+                with t2:
+                    with st.form("add_prop_f"):
+                        pid = st.text_input("ID العقار", value=f"PROP-{random.randint(100, 999)}")
+                        pname = st.text_input("اسم المشروع / العقار")
+                        ploc = st.text_input("الموقع")
+                        pprice = st.number_input("سعر الشراء", min_value=0.0)
+                        pexp = st.number_input("المصروفات", min_value=0.0)
+                        psale = st.number_input("سعر البيع المتوقع", min_value=0.0)
+                        if st.form_submit_button("حفظ العقار"):
+                            if pname:
+                                with sqlite3.connect("mh_group_erp.db") as conn:
+                                    conn.execute("INSERT INTO properties (custom_id, name, location, price, expenses, sale_price, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                                 (pid, pname, ploc, pprice, pexp, psale, "متاح"))
+                                    conn.commit()
+                                st.success("تم الحفظ!")
+                                st.rerun()
+            with tab_serv:
+                render_department_services_content("العقارات والمشاريع")
+        else:
+            t1, t2 = st.tabs(["📋 العقارات المسجلة", "➕ إضافة عقار"])
+            with t1:
+                st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
+            with t2:
+                with st.form("add_prop_f_user"):
+                    pid = st.text_input("ID العقار", value=f"PROP-{random.randint(100, 999)}")
+                    pname = st.text_input("اسم المشروع / العقار")
+                    ploc = st.text_input("الموقع")
+                    pprice = st.number_input("سعر الشراء", min_value=0.0)
+                    pexp = st.number_input("المصروفات", min_value=0.0)
+                    psale = st.number_input("سعر البيع المتوقع", min_value=0.0)
+                    if st.form_submit_button("حفظ العقار"):
+                        if pname:
+                            with sqlite3.connect("mh_group_erp.db") as conn:
+                                conn.execute("INSERT INTO properties (custom_id, name, location, price, expenses, sale_price, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                             (pid, pname, ploc, pprice, pexp, psale, "متاح"))
+                                conn.commit()
+                            st.success("تم الحفظ!")
+                            st.rerun()
 
     elif selected_page == "📌 لوحة خدمات العقارات والمشاريع":
-        render_department_service_page("العقارات والمشاريع")
+        render_department_services_content("العقارات والمشاريع")
 
     # ==========================================
-    # 🤝 المستثمرين
+    # 🤝 المستثمرين (شاملة خدمات القسم للأدمن)
     # ==========================================
     elif selected_page == "🤝 المستثمرين":
         st.markdown("<h1 class='main-header'>🤝 قسم المستثمرين وحساب الأرباح</h1>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر"])
-        with tab1:
-            st.dataframe(safe_read_sql("SELECT * FROM investors ORDER BY id DESC"), use_container_width=True)
-        with tab2:
-            df_props = safe_read_sql("SELECT custom_id FROM properties")
-            prop_options = df_props["custom_id"].tolist() if not df_props.empty else ["عام"]
-            with st.form("add_investor_form"):
-                inv_name = st.text_input("اسم المستثمر")
-                prop_id = st.selectbox("العقار المرتبط", prop_options)
-                inv_amt = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
-                inv_ratio = st.number_input("نسبة المشاركة (%)", min_value=0.0, max_value=100.0)
-                return_rate = st.number_input("نسبة العائد المتوقع (%)", min_value=0.0)
-                tot_returns = inv_amt * (1 + (return_rate / 100))
-                if st.form_submit_button("حفظ بيانات المستثمر"):
-                    if inv_name and inv_amt > 0:
-                        with sqlite3.connect("mh_group_erp.db") as conn:
-                            conn.execute("INSERT INTO investors (name, property_custom_id, investment_amount, investment_ratio, return_rate, total_returns, start_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                         (inv_name, prop_id, inv_amt, inv_ratio, return_rate, tot_returns, str(datetime.date.today())))
-                            conn.commit()
-                        st.success("تم الحفظ!")
-                        st.rerun()
+        if role == "Admin":
+            tab_main, tab_serv = st.tabs(["📋 المستثمرين والأرباح", "📌 لوحة خدمات المستثمرين"])
+            with tab_main:
+                t1, t2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر"])
+                with t1:
+                    st.dataframe(safe_read_sql("SELECT * FROM investors ORDER BY id DESC"), use_container_width=True)
+                with t2:
+                    df_props = safe_read_sql("SELECT custom_id FROM properties")
+                    prop_options = df_props["custom_id"].tolist() if not df_props.empty else ["عام"]
+                    with st.form("add_investor_form"):
+                        inv_name = st.text_input("اسم المستثمر")
+                        prop_id = st.selectbox("العقار المرتبط", prop_options)
+                        inv_amt = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
+                        inv_ratio = st.number_input("نسبة المشاركة (%)", min_value=0.0, max_value=100.0)
+                        return_rate = st.number_input("نسبة العائد المتوقع (%)", min_value=0.0)
+                        tot_returns = inv_amt * (1 + (return_rate / 100))
+                        if st.form_submit_button("حفظ بيانات المستثمر"):
+                            if inv_name and inv_amt > 0:
+                                with sqlite3.connect("mh_group_erp.db") as conn:
+                                    conn.execute("INSERT INTO investors (name, property_custom_id, investment_amount, investment_ratio, return_rate, total_returns, start_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                                 (inv_name, prop_id, inv_amt, inv_ratio, return_rate, tot_returns, str(datetime.date.today())))
+                                    conn.commit()
+                                st.success("تم الحفظ!")
+                                st.rerun()
+            with tab_serv:
+                render_department_services_content("المستثمرين")
+        else:
+            t1, t2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر"])
+            with t1:
+                st.dataframe(safe_read_sql("SELECT * FROM investors ORDER BY id DESC"), use_container_width=True)
+            with t2:
+                df_props = safe_read_sql("SELECT custom_id FROM properties")
+                prop_options = df_props["custom_id"].tolist() if not df_props.empty else ["عام"]
+                with st.form("add_investor_form_user"):
+                    inv_name = st.text_input("اسم المستثمر")
+                    prop_id = st.selectbox("العقار المرتبط", prop_options)
+                    inv_amt = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
+                    inv_ratio = st.number_input("نسبة المشاركة (%)", min_value=0.0, max_value=100.0)
+                    return_rate = st.number_input("نسبة العائد المتوقع (%)", min_value=0.0)
+                    tot_returns = inv_amt * (1 + (return_rate / 100))
+                    if st.form_submit_button("حفظ بيانات المستثمر"):
+                        if inv_name and inv_amt > 0:
+                            with sqlite3.connect("mh_group_erp.db") as conn:
+                                conn.execute("INSERT INTO investors (name, property_custom_id, investment_amount, investment_ratio, return_rate, total_returns, start_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                             (inv_name, prop_id, inv_amt, inv_ratio, return_rate, tot_returns, str(datetime.date.today())))
+                                conn.commit()
+                            st.success("تم الحفظ!")
+                            st.rerun()
 
     elif selected_page == "📌 لوحة خدمات المستثمرين":
-        render_department_service_page("المستثمرين")
+        render_department_services_content("المستثمرين")
 
     # ==========================================
     # ⏱️ سجل العمليات
