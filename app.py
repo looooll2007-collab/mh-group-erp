@@ -89,7 +89,6 @@ def init_db():
     with sqlite3.connect("mh_group_erp.db") as conn:
         cursor = conn.cursor()
 
-        # إنشاء الجداول الأساسية
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -198,7 +197,6 @@ def init_db():
             )
         """)
 
-        # الهجرة التلقائية (تحديث الأعمدة للجداول القديمة تلقائياً دون أي فقدان للبيانات)
         migrations = [
             ("users", "phone", "TEXT"),
             ("users", "email", "TEXT"),
@@ -227,7 +225,6 @@ def init_db():
             except sqlite3.OperationalError:
                 pass
 
-        # إنشاء حساب الأدمن الافتراضي إذا لم يكن موجوداً
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
             cursor.execute("INSERT INTO users (username, password, role, phone, email, avatar_path) VALUES ('admin', 'admin123', 'Admin', '01000000000', 'admin@mhgroup.com', '')")
@@ -321,10 +318,11 @@ else:
     st.sidebar.markdown(f"**المستخدم:** `{st.session_state['username']}`\n\n**الصلاحية:** `{st.session_state['user_role']}`")
 
     role = st.session_state["user_role"]
-    allowed_pages = ["📊 لوحة التحليلات التنفيذية"]
+    allowed_pages = []
 
     if role == "Admin":
-        allowed_pages.extend([
+        allowed_pages = [
+            "📊 لوحة التحليلات التنفيذية",
             "⚙️ المستخدمون والجلسات والـ IP",
             "💰 الإدارة المالية",
             "👷 الموارد البشرية",
@@ -333,36 +331,36 @@ else:
             "⏱️ سجل العمليات",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
-        ])
+        ]
     elif role == "HR":
-        allowed_pages.extend([
+        allowed_pages = [
             "👷 الموارد البشرية",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
-        ])
+        ]
     elif role == "Finance":
-        allowed_pages.extend([
+        allowed_pages = [
             "💰 الإدارة المالية",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
-        ])
+        ]
     elif role == "RealEstate":
-        allowed_pages.extend([
+        allowed_pages = [
             "🏢 العقارات والمشاريع",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
-        ])
+        ]
     elif role == "Investor":
-        allowed_pages.extend([
+        allowed_pages = [
             "🤝 المستثمرين",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
-        ])
+        ]
     else:
-        allowed_pages.extend([
+        allowed_pages = [
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
-        ])
+        ]
 
     selected_page = st.sidebar.radio("الأقسام:", allowed_pages)
 
@@ -377,7 +375,6 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # دالة موحدة لخدمات القسم (عرض بيانات الحساب للقراءة فقط داخل الأقسام)
     def render_department_workspace(dept_name, core_content_func):
         st.markdown(f"<h1 class='main-header'>🏢 قسم: {dept_name}</h1>", unsafe_allow_html=True)
         
@@ -443,7 +440,7 @@ else:
                         st.success("تم تسجيل الإبلاغ وإرساله بنجاح!")
 
     # ==========================================
-    # 📊 1. لوحة التحليلات التنفيذية
+    # 📊 1. لوحة التحليلات التنفيذية (للأدمن فقط)
     # ==========================================
     if selected_page == "📊 لوحة التحليلات التنفيذية":
         st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم</h1>", unsafe_allow_html=True)
@@ -725,7 +722,7 @@ else:
         render_department_workspace("المستثمرين", investors_core)
 
     # ==========================================
-    # ⏱️ سجل العمليات
+    # ⏱️ سجل العمليات (خاص بالأدمن)
     # ==========================================
     elif selected_page == "⏱️ سجل العمليات":
         st.markdown("<h1 class='main-header'>⏱️ سجل العمليات والأنشطة (Audit Trail)</h1>", unsafe_allow_html=True)
