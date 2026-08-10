@@ -125,7 +125,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. تهيئة قاعدة البيانات الشاملة المحدثة
+# 2. تهيئة قاعدة البيانات الشاملة مع معالجة الهيكلة
 # ==========================================
 def get_ip_address():
     try:
@@ -150,6 +150,8 @@ def init_db():
                 phone TEXT
             )
         """)
+        
+        # إنشاء جدول user_sessions أو تحديثه بالحقوق المطلوبة
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,6 +162,15 @@ def init_db():
                 status TEXT
             )
         """)
+        
+        # فحص وإضافة الأعمدة إن كانت غائبة في الجداول القديمة
+        existing_cols = [row[1] for row in cursor.execute("PRAGMA table_info(user_sessions)").fetchall()]
+        for col in ["logout_time", "ip_address", "status"]:
+            if col not in existing_cols:
+                try:
+                    cursor.execute(f"ALTER TABLE user_sessions ADD COLUMN {col} TEXT")
+                except Exception:
+                    pass
 
         # 2. المالية والحسابات والمصروفات والسلف
         cursor.execute("""
@@ -464,7 +475,6 @@ else:
     elif selected_page == "📊 لوحة التحليلات والداشبورد":
         st.markdown("<h1 class='main-header'>📊 لوحة التحليلات التنفيذية والملخص العام</h1>", unsafe_allow_html=True)
 
-        # KPI Metrics
         m1, m2, m3, m4 = st.columns(4)
         total_p = safe_read_sql("SELECT COUNT(*) as count FROM properties")["count"].iloc[0] if not safe_read_sql("SELECT COUNT(*) as count FROM properties").empty else 0
         total_e = safe_read_sql("SELECT COUNT(*) as count FROM employees")["count"].iloc[0] if not safe_read_sql("SELECT COUNT(*) as count FROM employees").empty else 0
@@ -762,7 +772,7 @@ else:
     # ----------------------------------------------------
     elif selected_page == "⏱️ قسم سجل العمليات والمراقبة":
         st.markdown("<h1 class='main-header'>⏱️ سجل العمليات والأنشطة والمحاولات (Audit Trail)</h1>", unsafe_allow_html=True)
-        tab1, tab2 = tab1, tab2 = st.tabs(["📜 جميع الأنشطة والمحاولات", "🟢 الأقسام النشطة والتواجد"])
+        tab1, tab2 = st.tabs(["📜 جميع الأنشطة والمحاولات", "🟢 الأقسام النشطة والتواجد"])
 
         with tab1:
             st.subheader("سجل محاولات الدخول والعمليات (الناجحة والعمليات الفاشلة)")
