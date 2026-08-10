@@ -1,4 +1,7 @@
 import datetime
+استيراد نظام التشغيل
+استيراد عشوائي
+استيراimport datetime
 import os
 import random
 import sqlite3
@@ -282,7 +285,6 @@ def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.subheader("🔐 بوابة الدخول الموحدة للمجموعة")
-        # تم إضافة مفاتيح فريدة (keys) هنا لمنع خطأ التكرار
         username_input = st.text_input("اسم المستخدم", key="login_username_input")
         password_input = st.text_input("كلمة المرور", type="password", key="login_password_input")
 
@@ -296,6 +298,203 @@ def login_page():
 
             if res:
                 st.session_state["logged_in"] = True
+                st.session_state["user_role"] = res[0]
+                st.session_state["username"] = un
+
+                login_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with sqlite3.connect("mh_group_erp.db") as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "INSERT INTO user_sessions (username, login_time, logout_time, ip_address, status) VALUES (?, ?, ?, ?, ?)",
+                        (un, login_now, "نشطة حالياً", "127.0.0.1", "نشطة")
+                    )
+                    conn.commit()
+                    st.session_state["session_id"] = cur.lastrowid
+
+                log_audit_action(un, "الدخول", f"تسجيل دخول بصلاحية: {res[0]}")
+                st.success("تم تسجيل الدخول بنجاح!")
+                st.rerun()
+            else:
+                st.error("بيانات الدخول غير صحيحة!")
+
+if not st.session_state["logged_in"]:
+    login_page()
+else:
+    user_rec = safe_read_sql("SELECT phone, email, avatar_path FROM users WHERE username = ?", (st.session_state["username"],))
+    user_avatar = user_rec.iloc[0]["avatar_path"] if not user_rec.empty and "avatar_path" in user_rec.columns and user_rec.iloc[0]["avatar_path"] else None
+
+    st.sidebar.title("🏢 MH Group ERP")
+    if user_avatar and os.path.exists(user_avatar):
+        st.sidebar.image(user_avatar, width=80)
+    st.sidebar.markdown(f"**المستخدم:** `{st.session_state['username']}`\n\n**الصلاحية:** `{st.session_state['user_role']}`")
+
+    role = st.session_state["user_role"]
+    allowed_pages = []
+
+    if role == "Admin":
+        allowed_pages = [
+            "📊 لوحة التحليلات التنفيذية",
+            "⚙️ المستخدمون والجلسات والـ IP",
+            "💰 الإدارة المالية",
+            "👷 الموارد البشرية",
+            "🏢 العقارات والمشاريع",
+            "🤝 المستثمرين",
+            "⏱️ سجل العمليات",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "HR":
+        allowed_pages = [
+            "👷 الموارد البشرية",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "Finance":
+        allowed_pages = [
+            "💰 الإدارة المالية",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "RealEstate":
+        allowed_pages = [
+            "🏢 العقارات والمشاريع",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "Investor":
+        allowed_pages = [
+            "🤝 المستثمرين",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    else:
+        allowed_pages = [
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+
+    selected_page = st.sidebar.radio("الأقسام:", allowed_pages)
+
+    if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True):
+        if st.session_state["session_id"]:
+            logout_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with sqlite3.connect("mh_group_erp.db") as conn:
+                conn.execute("UPDATE user_sessions SET logout_time = ?, status = 'منتهية' WHERE id = ?", (logout_now, st.session_state["session_id"]))
+                conn.commit()
+        log_audit_action(st.session_state["username"], "خروج", "تسجيل خروج آمن")
+        st.session_state["logged_in"] = False
+        st.session_state["session_id"] = None
+        st.rerun()
+
+    def render_department_workspace(dept_name, core_content_func):
+        st.markdown(f"<h1 class='main-header'>🏢 قسم: {dept_name}</h1>", unsafe_allow_html=True)
+        
+        t_op, t_prof, t_files, t_iss = st.tabs([
+            f"📋 عمليات {dept_name}", 
+            "👤 معلومات الحساب والصورة الشخصية", 
+            "📁 رفع تقارير ومستندات القسم", 
+            "🛠️ الإبلاغ عن مشكلة بالقسم"
+        ])
+        
+        with t_op:
+            core_content_func()
+            
+        with t_prof:
+            st.markdown(f"### 👤 بيانات الحساب والصورة الشخصية (مسجلة من الإدارة - للقراءة فقط)")
+            curr = st.session_state["username"]
+            df_u = safe_read_sql("SELECT username, phone, email, role, avatar_path FROM users WHERE username = ?", (curr,))
+            if df_u.empty:
+                df_u = pd.DataFrame([{"username": curr, "phone": "غير متوفر", "email": "غير متوفر", "role": st.session_state["user_role"], "avatar_path": ""}])
+            
+            c_img, c_txt = st.columns([1, 2])
+            with c_img:
+                av = df_u.iloc[0]["avatar_path"] if "avatar_path" in df_u.columns else None
+                if av and os.path.exists(av):
+                    st.image(av, width=130, caption="الصورة الشخصية الحالية")
+                else:
+                    st.info("لا توجد صورة شخصية مرفوعة.")
+            with c_txt:
+                st.info("⚠️ هذه المعلومات مسجلة بمعرفة الإدارة ولا يمكن تعديلها من هذه الشاشة.")
+                st.markdown(f"**اسم المستخدم:** `{df_u.iloc[0]['username']}`")
+                st.markdown(f"**الصلاحية:** `{df_u.iloc[0]['role']}`")
+                st.markdown(f"**رقم الهاتف:** `{df_u.iloc[0]['phone'] if 'phone' in df_u.columns and df_u.iloc[0]['phone'] else 'غير متوفر'}`")
+                st.markdown(f"**البريد الإلكتروني:** `{df_u.iloc[0]['email'] if 'email' in df_u.columns and df_u.iloc[0]['email'] else 'غير متوفر'}`")
+
+        with t_files:
+            st.markdown(f"### 📁 رفع تقارير ومستندات قسم: {dept_name}")
+            uploaded_file = st.file_uploader(f"رفع مستند أو تقرير لـ {dept_name}", key=f"up_{dept_name}_{random.randint(1,1000)}")
+            if uploaded_file:
+                filepath = os.path.join(UPLOAD_DIR, uploaded_file.name)
+                with open(filepath, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                with sqlite3.connect("mh_group_erp.db") as conn:
+                    conn.execute("INSERT INTO department_files (department, filename, uploader, upload_date) VALUES (?, ?, ?, ?)",
+                                 (dept_name, uploaded_file.name, st.session_state["username"], str(datetime.date.today())))
+                    conn.commit()
+                log_audit_action(st.session_state["username"], dept_name, f"رفع مستند: {uploaded_file.name}")
+                st.success("تم رفع المستند/التقرير بنجاح وتحديث لوحة تحكم الأدمن!")
+            
+            st.write("#### المستندات والتقارير المرفوعة للقسم:")
+            df_files = safe_read_sql("SELECT filename, uploader, upload_date FROM department_files WHERE department = ?", (dept_name,))
+            st.dataframe(df_files, use_container_width=True)
+
+        with t_iss:
+            st.markdown(f"### 🛠️ الإبلاغ عن مشكلة في قسم: {dept_name}")
+            with st.form(f"issue_form_{dept_name}_{random.randint(1,1000)}"):
+                issue_desc = st.text_area("تفاصيل المشكلة أو العطل التقني في القسم")
+                if st.form_submit_button("إرسال الإبلاغ للإدارة"):
+                    if issue_desc:
+                        with sqlite3.connect("mh_group_erp.db") as conn:
+                            conn.execute("INSERT INTO support_tickets (username, department, issue_text, status, ticket_date) VALUES (?, ?, ?, ?, ?)",
+                                         (st.session_state["username"], dept_name, issue_desc, "معلقة", str(datetime.date.today())))
+                            conn.commit()
+                        log_audit_action(st.session_state["username"], dept_name, f"إبلاغ عن مشكلة: {issue_desc}")
+                        st.success("تم تسجيل الإبلاغ وإرساله لوحة تحكم الأدمن بنجاح!")
+
+    # ==========================================
+    # 📊 اللوحة الرئيسية التنفيذية
+    # ==========================================
+    if selected_page == "📊 لوحة التحليلات التنفيذية":
+        st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم التنفيذية الشاملة (MH Group)</h1>", unsafe_allow_html=True)
+        
+        st.markdown(
+            f"""
+            <div class='executive-card'>
+                <h3 style='margin-top: 0; color: {current_theme["primary"]};'>مرحباً سيادة المدير، {st.session_state['username']}</h3>
+                <p style='margin-bottom: 0; color: {current_theme["text"]};'>نظام الإدارة المركزي لشركة <b>MH Group للاستثمار والتطوير العقاري</b> - متابعة فورية لكافة الأقسام، التدفقات المالية، الأصول العقارية، والموارد البشرية.</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+        df_fin = safe_read_sql("SELECT trans_type, amount, department FROM financial_transactions")
+        tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
+        tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
+        net_prof = tot_inc - tot_exp
+
+        df_props = safe_read_sql("SELECT price, name, location, sale_price, status FROM properties")
+        prop_val = df_props["price"].sum() if not df_props.empty else 0.0
+        prop_count = len(df_props)
+
+        df_emp = safe_read_sql("SELECT workers_count, total_pay FROM employees")
+        total_workers = df_emp["workers_count"].sum() if not df_emp.empty and "workers_count" in df_emp.columns else len(df_emp)
+        total_payroll = df_emp["total_pay"].sum() if not df_emp.empty and "total_pay" in df_emp.columns else 0.0
+
+        df_inv = safe_read_sql("SELECT investment_amount, total_returns FROM investors")
+        total_investments = df_inv["investment_amount"].sum() if not df_inv.empty and "investment_amount" in df_inv.columns else 0.0
+
+        st.subheader("📌 المؤشرات المالية والاستثمارية العليا")
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حسابات الإدارة")
+        with m2:
+            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="حسابات الإدارة")
+        with m3:
+            st.metric("صافي الأرباح التشغيلية", f"{net_prof:,.0f} ج.م", delta="العائد الصافي")
+        with m4:
+            st.metric("إجمالي الاستثمارات", f"{total_investments:,.0f} ج.م", delta="رأس المال المستثمر")
+
+        st.mark
                 st.session_state["user_role"] = res[0]
                 st.session_state["username"] = un
 
