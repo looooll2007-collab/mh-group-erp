@@ -96,19 +96,17 @@ def init_db():
                 password TEXT,
                 role TEXT,
                 phone TEXT,
+                email TEXT,
                 avatar_path TEXT
             )
         """)
         
-        # التكدس التلقائي للأعمدة في حال كان الداتا بأساسيات قديمة
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
-        except sqlite3.OperationalError:
-            pass
+        # التحديث التلقائي للأعمدة في حال كان الداتا بأساسيات قديمة
+        for col, col_type in [("phone", "TEXT"), ("email", "TEXT"), ("avatar_path", "TEXT")]:
+            try:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
+            except sqlite3.OperationalError:
+                pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
@@ -208,7 +206,7 @@ def init_db():
 
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
-            cursor.execute("INSERT INTO users (username, password, role, phone, avatar_path) VALUES ('admin', 'admin123', 'Admin', '01000000000', '')")
+            cursor.execute("INSERT INTO users (username, password, role, phone, email, avatar_path) VALUES ('admin', 'admin123', 'Admin', '01000000000', 'admin@mhgroup.com', '')")
 
         conn.commit()
 
@@ -290,7 +288,7 @@ def login_page():
 if not st.session_state["logged_in"]:
     login_page()
 else:
-    user_rec = safe_read_sql("SELECT phone, avatar_path FROM users WHERE username = ?", (st.session_state["username"],))
+    user_rec = safe_read_sql("SELECT phone, email, avatar_path FROM users WHERE username = ?", (st.session_state["username"],))
     user_avatar = user_rec.iloc[0]["avatar_path"] if not user_rec.empty and "avatar_path" in user_rec.columns and user_rec.iloc[0]["avatar_path"] else None
 
     st.sidebar.title("🏢 MH Group ERP")
@@ -355,13 +353,13 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # دالة موحدة لخدمات القسم المنفصلة
+    # دالة موحدة لخدمات القسم المنفصلة (مع عرض معلومات الحساب المسجلة من الأدمن للقراءة فقط)
     def render_department_workspace(dept_name, core_content_func):
         st.markdown(f"<h1 class='main-header'>🏢 قسم: {dept_name}</h1>", unsafe_allow_html=True)
         
         t_op, t_prof, t_files, t_iss = st.tabs([
             f"📋 عمليات {dept_name}", 
-            "👤 الملف الشخصي السريع", 
+            "👤 معلومات الحساب والصورة الشخصية", 
             "📁 رفع تقارير ومستندات القسم", 
             "🛠️ الإبلاغ عن مشكلة بالقسم"
         ])
@@ -370,21 +368,25 @@ else:
             core_content_func()
             
         with t_prof:
-            st.markdown(f"### 👤 الملف الشخصي السريع - {dept_name}")
+            st.markdown(f"### 👤 بيانات الحساب والصورة الشخصية (معلومات مسجلة من الإدارة)")
             curr = st.session_state["username"]
-            df_u = safe_read_sql("SELECT username, phone, role, avatar_path FROM users WHERE username = ?", (curr,))
-            if not df_u.empty:
-                c_img, c_txt = st.columns([1, 3])
-                with c_img:
-                    av = df_u.iloc[0]["avatar_path"] if "avatar_path" in df_u.columns else None
-                    if av and os.path.exists(av):
-                        st.image(av, width=100)
-                    else:
-                        st.info("لا توجد صورة شخصية.")
-                with c_txt:
-                    st.write(f"**اسم المستخدم:** {df_u.iloc[0]['username']}")
-                    st.write(f"**الصلاحية:** {df_u.iloc[0]['role']}")
-                    st.write(f"**الهاتف:** {df_u.iloc[0]['phone'] if 'phone' in df_u.columns else 'غير متوفر'}")
+            df_u = safe_read_sql("SELECT username, phone, email, role, avatar_path FROM users WHERE username = ?", (curr,))
+            if df_u.empty:
+                df_u = pd.DataFrame([{"username": curr, "phone": "غير متوفر", "email": "غير متوفر", "role": st.session_state["user_role"], "avatar_path": ""}])
+            
+            c_img, c_txt = st.columns([1, 2])
+            with c_img:
+                av = df_u.iloc[0]["avatar_path"] if "avatar_path" in df_u.columns else None
+                if av and os.path.exists(av):
+                    st.image(av, width=130, caption="الصورة الشخصية الحالية")
+                else:
+                    st.info("لا توجد صورة شخصية مرفوعة. يمكنك رفعها من قسم (الملف الشخصي).")
+            with c_txt:
+                st.info("⚠️ هذه المعلومات معرفة ومسجلة بواسطة الإدارة ولا يمكن تعديلها من هذه الشاشة.")
+                st.markdown(f"**اسم المستخدم:** `{df_u.iloc[0]['username']}`")
+                st.markdown(f"**الصلاحية:** `{df_u.iloc[0]['role']}`")
+                st.markdown(f"**رقم الهاتف:** `{df_u.iloc[0]['phone'] if 'phone' in df_u.columns and df_u.iloc[0]['phone'] else 'غير متوفر'}`")
+                st.markdown(f"**البريد الإلكتروني:** `{df_u.iloc[0]['email'] if 'email' in df_u.columns and df_u.iloc[0]['email'] else 'غير متوفر'}`")
 
         with t_files:
             st.markdown(f"### 📁 رفع تقارير ومستندات قسم: {dept_name}")
@@ -463,38 +465,19 @@ else:
             else:
                 st.info("لا توجد أنشطة مسجلة حديثاً.")
 
-        st.markdown("---")
-
-        c_prop_tbl, c_fin_tbl = st.columns(2)
-        with c_prop_tbl:
-            st.subheader("🏢 أخر العقارات المضافة")
-            df_p_recent = safe_read_sql("SELECT custom_id as 'ID', name as 'اسم العقار', location as 'الموقع', price as 'سعر الشراء', status as 'الحالة' FROM properties ORDER BY id DESC LIMIT 5")
-            if not df_p_recent.empty:
-                st.dataframe(df_p_recent, use_container_width=True)
-            else:
-                st.info("لا توجد عقارات مسجلة.")
-
-        with c_fin_tbl:
-            st.subheader("💰 أخر المعاملات المالية")
-            df_f_recent = safe_read_sql("SELECT trans_type as 'نوع العملية', department as 'القسم', amount as 'المبلغ', trans_date as 'التاريخ' FROM financial_transactions ORDER BY id DESC LIMIT 5")
-            if not df_f_recent.empty:
-                st.dataframe(df_f_recent, use_container_width=True)
-            else:
-                st.info("لا توجد معاملات مالية مسجلة.")
-
     # ==========================================
-    # 👤 الملف الشخصي (مُعالج ومؤمن تماماً ضد أي فراغ)
+    # 👤 الملف الشخصي (إدارة البيانات، البريد، الهاتف، الصورة، كلمة المرور)
     # ==========================================
     elif selected_page == "👤 الملف الشخصي":
         st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
         curr_user = st.session_state["username"]
-        df_u = safe_read_sql("SELECT username, phone, role, avatar_path FROM users WHERE username = ?", (curr_user,))
+        df_u = safe_read_sql("SELECT username, phone, email, role, avatar_path FROM users WHERE username = ?", (curr_user,))
         
-        # إذا حصل أي تأخير أو فراغ، ننشئ داتا احتياطية فورية لضمان ظهور الصفحة بكامل عناصرها
         if df_u.empty:
             df_u = pd.DataFrame([{
                 "username": curr_user,
                 "phone": "01000000000",
+                "email": "user@mhgroup.com",
                 "role": st.session_state["user_role"],
                 "avatar_path": ""
             }])
@@ -503,7 +486,7 @@ else:
         with col_img:
             current_av = df_u.iloc[0]["avatar_path"] if "avatar_path" in df_u.columns else None
             if current_av and os.path.exists(current_av):
-                st.image(current_av, width=150, caption="الصورة الشخصية الحالية")
+                st.image(current_av, width=160, caption="الصورة الشخصية الحالية")
             else:
                 st.info("لا توجد صورة شخصية مرفوعة حالياً.")
             
@@ -524,7 +507,13 @@ else:
             
             with st.form("update_profile_form"):
                 phone_val = df_u.iloc[0]['phone'] if 'phone' in df_u.columns and df_u.iloc[0]['phone'] else ""
-                new_phone = st.text_input("رقم الهاتف الحالي", value=phone_val)
+                email_val = df_u.iloc[0]['email'] if 'email' in df_u.columns and df_u.iloc[0]['email'] else ""
+                
+                new_phone = st.text_input("رقم الهاتف", value=phone_val)
+                new_email = st.text_input("البريد الإلكتروني", value=email_val)
+                
+                st.markdown("---")
+                st.subheader("🔑 تغيير كلمة المرور")
                 old_pw = st.text_input("كلمة المرور الحالية", type="password")
                 new_pw = st.text_input("كلمة المرور الجديدة (اختياري)", type="password")
                 confirm_pw = st.text_input("تأكيد كلمة المرور الجديدة", type="password")
@@ -542,10 +531,10 @@ else:
                             st.error("كلمتا المرور الجديدتان غير متطابقتين!")
                         else:
                             final_pw = new_pw if new_pw else db_pw
-                            cur.execute("UPDATE users SET password = ?, phone = ? WHERE username = ?", (final_pw, new_phone, curr_user))
+                            cur.execute("UPDATE users SET password = ?, phone = ?, email = ? WHERE username = ?", (final_pw, new_phone, new_email, curr_user))
                             conn.commit()
-                            log_audit_action(curr_user, "الملف الشخصي", "تحديث بيانات الحساب")
-                            st.success("تم تحديث البيانات بنجاح!")
+                            log_audit_action(curr_user, "الملف الشخصي", "تحديث البيانات الشخصية ووسائل التواصل")
+                            st.success("تم تحديث بيانات الملف الشخصي بنجاح!")
                             st.rerun()
 
     # ==========================================
@@ -567,7 +556,7 @@ else:
         tab1, tab2, tab3 = st.tabs(["👥 إدارة الحسابات", "➕ إضافة مستخدم", "📡 الجلسات النشطة وإدارة الـ IP"])
 
         with tab1:
-            df_users = safe_read_sql("SELECT id, username, role, phone FROM users")
+            df_users = safe_read_sql("SELECT id, username, role, phone, email FROM users")
             st.dataframe(df_users, use_container_width=True)
             user_to_del = st.selectbox("اختر المستخدم للحذف:", options=[""] + df_users["username"].tolist() if not df_users.empty else [""])
             if st.button("تأكيد حذف الحساب"):
@@ -584,11 +573,12 @@ else:
                 np = st.text_input("كلمة المرور", type="password")
                 nr = st.selectbox("الصلاحية", ["HR", "Finance", "RealEstate", "Investor", "Admin"])
                 nph = st.text_input("رقم الهاتف")
+                nem = st.text_input("البريد الإلكتروني")
                 if st.form_submit_button("إضافة الحساب"):
                     if nu and np:
                         try:
                             with sqlite3.connect("mh_group_erp.db") as conn:
-                                conn.execute("INSERT INTO users (username, password, role, phone, avatar_path) VALUES (?, ?, ?, ?, ?)", (nu.strip(), np.strip(), nr, nph, ""))
+                                conn.execute("INSERT INTO users (username, password, role, phone, email, avatar_path) VALUES (?, ?, ?, ?, ?, ?)", (nu.strip(), np.strip(), nr, nph, nem, ""))
                                 conn.commit()
                             st.success(f"تم إضافة المستخدم {nu} بنجاح!")
                             st.rerun()
