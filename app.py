@@ -289,7 +289,7 @@ def login_page():
                 st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
 
 # ==========================================
-# 4. التحكم بالصلاحيات والأقسام
+# 4. التحكم بالصلاحيات والأقسام (أسماء مختصرة)
 # ==========================================
 if not st.session_state["logged_in"]:
     login_page()
@@ -299,38 +299,38 @@ else:
 
     role = st.session_state["user_role"]
     
-    # القوائم الأساسية حسب الصلاحيات
+    # القوائم الأساسية حسب الصلاحيات (أسماء مختصرة تماماً)
     role_pages = []
     if role == "Admin":
         role_pages = [
-            "📊 لوحة التحليلات والداشبورد",
-            "⚙️ قسم إدارة المستخدمين والـ IP",
-            "💰 قسم الإدارة المالية الشاملة",
-            "👷 قسم الموارد البشرية والعمالة (HR)",
-            "🏢 قسم العقارات والمخزون",
-            "🤝 قسم المستثمرين والأرباح",
-            "⏱️ قسم سجل العمليات والمراقبة (Audit Logs)"
+            "📊 لوحة التحليلات",
+            "⚙️ المستخدمون والأمان",
+            "💰 الإدارة المالية",
+            "👷 الموارد البشرية",
+            "🏢 العقارات والمشاريع",
+            "🤝 المستثمرين",
+            "⏱️ سجل العمليات"
         ]
     elif role == "Finance":
-        role_pages = ["💰 قسم الإدارة المالية الشاملة"]
+        role_pages = ["💰 الإدارة المالية"]
     elif role == "HR":
-        role_pages = ["👷 قسم الموارد البشرية والعمالة (HR)"]
+        role_pages = ["👷 الموارد البشرية"]
     elif role == "RealEstate":
-        role_pages = ["🏢 قسم العقارات والمخزون"]
+        role_pages = ["🏢 العقارات والمشاريع"]
     elif role == "Investor":
-        role_pages = ["🤝 قسم المستثمرين والأرباح"]
+        role_pages = ["🤝 المستثمرين"]
     else:
-        role_pages = ["📊 لوحة التحليلات والداشبورد"]
+        role_pages = ["📊 لوحة التحليلات"]
 
-    # إضافات عامة متاحة لجميع المستخدمين
+    # إضافات عامة مختصرة متاحة لجميع المستخدمين
     common_pages = [
-        "👤 الملف الشخصي وإعدادات الحساب",
-        "🎨 إدارة الثيمات والألوان"
+        "👤 الملف الشخصي",
+        "🎨 الثيمات والألوان"
     ]
 
     allowed_pages = role_pages + common_pages
 
-    selected_page = st.sidebar.radio("القائمة المتاحة لصلاحيتك:", allowed_pages)
+    selected_page = st.sidebar.radio("الأقسام:", allowed_pages)
 
     if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True):
         if st.session_state["session_id"]:
@@ -343,10 +343,31 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # 👤 قسم الملف الشخصي
-    if selected_page == "👤 الملف الشخصي وإعدادات الحساب":
+    # 📊 لوحة التحليلات والداشبورد
+    if selected_page == "📊 لوحة التحليلات":
+        st.markdown("<h1 class='main-header'>📊 لوحة التحليلات التنفيذية والملخص العام</h1>", unsafe_allow_html=True)
+        
+        # مؤشرات سريعة
+        df_fin = safe_read_sql("SELECT trans_type, amount FROM financial_transactions")
+        total_income = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0
+        total_expense = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0
+        net_profit = total_income - total_expense
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("إجمالي الإيرادات", f"{total_income:,.2f} EGP")
+        with c2:
+            st.metric("إجمالي المصروفات", f"{total_expense:,.2f} EGP")
+        with c3:
+            st.metric("صافي الرصيد", f"{net_profit:,.2f} EGP", delta=f"{net_profit}")
+
+        st.markdown("---")
+        st.info("مرحباً بك في منظومة MH Group. تم تنظيم القائمة بأسماء مختصرة وسريعة لسهولة التصفح.")
+
+    # 👤 الملف الشخصي
+    elif selected_page == "👤 الملف الشخصي":
         st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["🔒 تغيير كلمة المرور والبيانات", "📜 سجل الجلسات الخاصة بي"])
+        tab1, tab2 = st.tabs(["🔒 كلمة المرور والبيانات", "📜 جلساتي النشطة"])
 
         with tab1:
             curr_user = st.session_state["username"]
@@ -385,8 +406,8 @@ else:
             df_my_sess = safe_read_sql("SELECT login_time, logout_time, ip_address, status FROM user_sessions WHERE username = ? ORDER BY id DESC", (st.session_state["username"],))
             st.dataframe(df_my_sess, use_container_width=True)
 
-    # 🎨 قسم إدارة الثيمات والألوان
-    elif selected_page == "🎨 إدارة الثيمات والألوان":
+    # 🎨 الثيمات والألوان
+    elif selected_page == "🎨 الثيمات والألوان":
         st.markdown("<h1 class='main-header'>🎨 تخصيص ألوان وثيم المنظومة</h1>", unsafe_allow_html=True)
         
         theme_options = list(THEMES.keys()) + ["تخصصي / مخصص (Custom Theme)"]
@@ -423,16 +444,15 @@ else:
                 st.success("تم تطبيق الألوان المخصصة بنجاح!")
                 st.rerun()
 
-    # 1️⃣ قسم المستخدمين والـ IP
-    elif selected_page == "⚙️ قسم إدارة المستخدمين والـ IP":
+    # ⚙️ المستخدمون والأمان
+    elif selected_page == "⚙️ المستخدمون والأمان":
         st.markdown("<h1 class='main-header'>⚙️ إدارة المستخدمين وصلاحيات الدخول والـ IP</h1>", unsafe_allow_html=True)
-        tab1, tab2, tab3 = st.tabs(["👥 الحسابات والصلاحيات", "➕ إضافة مستخدم جديد", "📡 إدارة سجل الجلسات وحذف الـ IP"])
+        tab1, tab2, tab3 = st.tabs(["👥 الحسابات", "➕ إضافة مستخدم", "📡 الجلسات والـ IP"])
 
         with tab1:
             df_users = safe_read_sql("SELECT id, username, role, phone FROM users")
             st.dataframe(df_users, use_container_width=True)
             st.markdown("---")
-            st.write("### 🗑️ حذف مستخدم")
             user_to_del = st.selectbox("اختر المستخدم للحذف:", options=[""] + df_users["username"].tolist())
             if st.button("تأكيد حذف الحساب"):
                 if user_to_del and user_to_del != "admin":
@@ -468,7 +488,6 @@ else:
 
             c1, c2 = st.columns(2)
             with c1:
-                st.write("#### 🗑️ حذف جلسة برقم ID")
                 sess_id_del = st.number_input("أدخل ID الجلسة للحذف:", min_value=1, step=1)
                 if st.button("حذف الجلسة"):
                     with sqlite3.connect("mh_group_erp.db") as conn:
@@ -479,7 +498,6 @@ else:
                     st.rerun()
 
             with c2:
-                st.write("#### 🚫 مسح جلسات IP معين")
                 ip_to_del = st.text_input("أدخل IP للـ مسح:")
                 if st.button("مسح كافة سجلات الـ IP"):
                     if ip_to_del:
@@ -490,13 +508,12 @@ else:
                         st.success(f"تم مسح جلسات الـ IP {ip_to_del} بنجاح!")
                         st.rerun()
 
-    # 2️⃣ قسم الإدارة المالية + الحاسبة
-    elif selected_page == "💰 قسم الإدارة المالية الشاملة":
+    # 💰 الإدارة المالية
+    elif selected_page == "💰 الإدارة المالية":
         st.markdown("<h1 class='main-header'>💰 الإدارة المالية وحاسبة المستحقات والعمالة</h1>", unsafe_allow_html=True)
-        tab1, tab2, tab3 = st.tabs(["🧮 حاسبة المستحقات والعمالة (مع الحفظ)", "💸 تسجيل المصروفات والواردات", "📜 كشف الحسابات المالية"])
+        tab1, tab2, tab3 = st.tabs(["🧮 حاسبة المستحقات", "💸 المصروفات والإيرادات", "📜 كشف الحسابات"])
 
         with tab1:
-            st.subheader("🧮 حاسبة العمل وتوثيق مستحقات الموردين والعمالة")
             with st.form("calc_and_save_form"):
                 col_a, col_b = st.columns(2)
                 with col_a:
@@ -517,9 +534,7 @@ else:
                 st.markdown(f"### 💵 إجمالي المستحق النهائي: **{total_calc:,.2f} EGP**")
                 notes_calc = st.text_input("بيان / ملاحظات إضافية للمستند", value=f"مستحقات {craft_sel} - العدد {workers_cnt}")
                 
-                submit_calc = st.form_submit_button("💾 حفظ المستحق في المصروفات المالية والسجل")
-                
-                if submit_calc:
+                if st.form_submit_button("💾 حفظ المستحق في المصروفات المالية"):
                     if total_calc > 0:
                         with sqlite3.connect("mh_group_erp.db") as conn:
                             conn.execute(
@@ -534,7 +549,6 @@ else:
                         st.error("يرجى إدخال قيم صالحة للحساب!")
 
         with tab2:
-            st.subheader("📊 تسجيل الصادرات والواردات")
             with st.form("fin_form"):
                 ttype = st.selectbox("نوع المعاملة", ["صادرات (مصروفات)", "واردات (إيرادات)"])
                 tdept = st.selectbox("القسم التابع له", ["العقارات", "الموارد البشرية", "المستثمرين", "عام"])
@@ -551,11 +565,10 @@ else:
                         st.rerun()
 
         with tab3:
-            st.subheader("📜 كشف الحسابات الموثقة")
             st.dataframe(safe_read_sql("SELECT * FROM financial_transactions ORDER BY id DESC"), use_container_width=True)
 
-    # 3️⃣ قسم الموارد البشرية والعمالة
-    elif selected_page == "👷 قسم الموارد البشرية والعمالة (HR)":
+    # 👷 الموارد البشرية
+    elif selected_page == "👷 الموارد البشرية":
         st.markdown("<h1 class='main-header'>👷 قسم الموارد البشرية والعمالة</h1>", unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["📋 سجل الكادر والعمالة", "➕ إضافة كادر جديد"])
 
@@ -584,8 +597,8 @@ else:
                         st.success("تم الحفظ بنجاح!")
                         st.rerun()
 
-    # 4️⃣ قسم العقارات والمخزون
-    elif selected_page == "🏢 قسم العقارات والمخزون":
+    # 🏢 العقارات والمشاريع
+    elif selected_page == "🏢 العقارات والمشاريع":
         st.markdown("<h1 class='main-header'>🏢 قسم إدارة العقارات والمشاريع</h1>", unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["📋 العقارات المسجلة", "➕ إضافة عقار جديد"])
 
@@ -610,8 +623,8 @@ else:
                         st.success("تم الحفظ!")
                         st.rerun()
 
-    # 5️⃣ قسم المستثمرين
-    elif selected_page == "🤝 قسم المستثمرين والأرباح":
+    # 🤝 المستثمرين
+    elif selected_page == "🤝 المستثمرين":
         st.markdown("<h1 class='main-header'>🤝 قسم المستثمرين وحساب الأرباح</h1>", unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر جديد"])
 
@@ -641,8 +654,8 @@ else:
                         st.success("تم حفظ بيانات المستثمر بنجاح!")
                         st.rerun()
 
-    # 6️⃣ سجل العمليات
-    elif selected_page == "⏱️ قسم سجل العمليات والمراقبة (Audit Logs)":
+    # ⏱️ سجل العمليات
+    elif selected_page == "⏱️ سجل العمليات":
         st.markdown("<h1 class='main-header'>⏱️ سجل العمليات والأنشطة المحدث (Audit Trail)</h1>", unsafe_allow_html=True)
         
         c_b1, c_b2 = st.columns([1, 5])
@@ -659,8 +672,3 @@ else:
 
         df_logs = safe_read_sql("SELECT id, username, department, action, status, ip_address, timestamp FROM audit_logs ORDER BY id DESC")
         st.dataframe(df_logs, use_container_width=True)
-
-    # 7️⃣ لوحة التحليلات
-    elif selected_page == "📊 لوحة التحليلات والداشبورد":
-        st.markdown("<h1 class='main-header'>📊 لوحة التحليلات التنفيذية والملخص العام</h1>", unsafe_allow_html=True)
-        st.info("مرحباً بك في المنظومة. الأقسام المعروضة في القائمة الجانبية مخصصة وفقاً لصلاحيتك الحالية.")
