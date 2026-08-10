@@ -59,9 +59,10 @@ st.markdown(
     }}
     div[data-testid="stMetric"] {{
         background-color: {current_theme["card"]} !important;
-        padding: 12px !important;
-        border-radius: 10px !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
         border: 1px solid {current_theme["border"]} !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }}
     section[data-testid="stSidebar"] {{
         background-color: {current_theme["card"]} !important;
@@ -73,6 +74,13 @@ st.markdown(
         border-radius: 6px !important;
         border: none !important;
         font-weight: bold !important;
+    }}
+    .executive-card {{
+        background-color: {current_theme["card"]};
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid {current_theme["border"]};
+        margin-bottom: 20px;
     }}
 </style>
 """,
@@ -441,13 +449,23 @@ else:
                         st.success("تم تسجيل الإبلاغ وإرساله لوحة تحكم الأدمن بنجاح!")
 
     # ==========================================
-    # 📊 1. لوحة التحليلات التنفيذية الشاملة (للأدمن فقط)
+    # 📊 اللوحة الرئيسية التنفيذية المعاد تصميمها باحترافية كاملة
     # ==========================================
     if selected_page == "📊 لوحة التحليلات التنفيذية":
-        st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم التنفيذية الشاملة (جميع الأقسام)</h1>", unsafe_allow_html=True)
-        st.markdown(f"👋 **مرحباً بك يا مدير النظام، {st.session_state['username']}** - متابعة مركزية فورية لبيانات وتقارير ومستندات كافة الأقسام.")
+        st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم التنفيذية الشاملة (MH Group)</h1>", unsafe_allow_html=True)
+        
+        # ترحيب تنفيذي راقي
+        st.markdown(
+            f"""
+            <div class='executive-card'>
+                <h3 style='margin-top: 0; color: {current_theme["primary"]};'>مرحباً سيادة المدير، {st.session_state['username']}</h3>
+                <p style='margin-bottom: 0; color: {current_theme["text"]};'>نظام الإدارة المركزي لشركة <b>MH Group للاستثمار والتطوير العقاري</b> - متابعة فورية لكافة الأقسام، التدفقات المالية، الأصول العقارية، والموارد البشرية.</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
-        # استعلامات تجميعية شاملة لكل أقسام الشركة
+        # استعلامات تجميعية دقيقة
         df_fin = safe_read_sql("SELECT trans_type, amount, department FROM financial_transactions")
         tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
         tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
@@ -467,48 +485,50 @@ else:
         df_all_files = safe_read_sql("SELECT department, filename, uploader, upload_date FROM department_files ORDER BY id DESC")
         df_all_tickets = safe_read_sql("SELECT id, username, department, issue_text, status, ticket_date FROM support_tickets ORDER BY id DESC")
 
-        # مؤشرات الأداء العليا (Metrics)
+        # المؤشرات المالية والعقارية الرئيسية
+        st.subheader("📌 المؤشرات المالية والاستثمارية العليا")
         m1, m2, m3, m4 = st.columns(4)
         with m1:
-            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حسابات المالية")
+            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حسابات الإدارة")
         with m2:
-            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="حسابات المالية")
+            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="التشغيل والمشاريع")
         with m3:
-            st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م", delta="صافي العمليات")
+            st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م", delta="العائد الصافي")
         with m4:
-            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م", delta=f"{prop_count} عقار مسجل")
+            st.metric("قيمة المحفظة العقارية", f"{prop_val:,.0f} ج.م", delta=f"{prop_count} مشروع وعقار")
 
+        # المؤشرات التشغيلية والعمالية
         m5, m6, m7, m8 = st.columns(4)
         with m5:
-            st.metric("إجمالي الاستثمارات", f"{total_investments:,.0f} ج.م", delta="قسم المستثمرين")
+            st.metric("إجمالي الاستثمارات", f"{total_investments:,.0f} ج.م", delta="رؤوس الأموال")
         with m6:
-            st.metric("إجمالي أجور العمالة", f"{total_payroll:,.0f} ج.م", delta="الموارد البشرية")
+            st.metric("أجور العمالة والكوادر", f"{total_payroll:,.0f} ج.م", delta=f"{total_workers} كادر فعال")
         with m7:
-            st.metric("إجمالي التقارير والمستندات", f"{len(df_all_files)} مستند مرفوع", delta="جميع الأقسام")
+            st.metric("مستندات وتقارير الأقسام", f"{len(df_all_files)} مستند", delta="الأرشيف المركزي")
         with m8:
-            st.metric("إجمالي الإبلاغات والأعطال", f"{len(df_all_tickets)} إبلاغ", delta="متابعة الأعطال")
+            st.metric("البلاغات والأعطال", f"{len(df_all_tickets)} إبلاغ", delta="متابعة الدعم")
 
         st.markdown("---")
 
-        # تبويبات متقدمة لمراجعة بيانات كافة الأقسام من لوحة الأدمن مباشرة
-        tab_charts, tab_files, tab_tickets, tab_all_data = st.tabs([
-            "📈 التحليلات والرسوم البيانية", 
-            "📁 مستندات وتقارير الأقسام المرفوعة", 
-            "🛠️ إبلاغات ومشاكل الأقسام", 
-            "📋 جداول بيانات الأقسام الكاملة"
+        # تبويبات اللوحة التنفيذية الرئيسية المحدثة بتصميم عصري
+        exec_tab1, exec_tab2, exec_tab3, exec_tab4 = st.tabs([
+            "📈 التحليلات والرسوم البيانية المتقدمة", 
+            "📁 أرشيف مستندات وتقارير الأقسام", 
+            "🛠️ متابعة إبلاغات وأعطال الأقسام", 
+            "📋 السجلات وجداول البيانات الشاملة"
         ])
 
-        with tab_charts:
-            c_chart, c_activity = st.columns([2, 1])
-            with c_chart:
-                st.subheader("📈 نظرة عامة على الأداء المالي")
+        with exec_tab1:
+            col_chart1, col_chart2 = st.columns([2, 1])
+            with col_chart1:
+                st.subheader("📈 تتبع حركة المعاملات المالية")
                 if not df_fin.empty:
                     st.line_chart(df_fin, y="amount")
                 else:
-                    st.info("لا توجد بيانات مالية كافية لعرض الرسم البياني حالياً.")
+                    st.info("لا توجد بيانات مالية مسجلة لعرض الرسم البياني حالياً.")
 
-            with c_activity:
-                st.subheader("🔔 النشاط الأخير والعمليات")
+            with col_chart2:
+                st.subheader("⚡ آخر الأنشطة والعمليات")
                 df_logs = safe_read_sql("SELECT action, timestamp FROM audit_logs ORDER BY id DESC LIMIT 5")
                 if not df_logs.empty:
                     for idx, row in df_logs.iterrows():
@@ -516,23 +536,23 @@ else:
                 else:
                     st.info("لا توجد أنشطة مسجلة حديثاً.")
 
-        with tab_files:
-            st.subheader("📁 جميع التقارير والمستندات المرفوعة بواسطة الأقسام (تحديث فوري)")
+        with exec_tab2:
+            st.subheader("📁 الأرشيف المركزي: مستندات وتقارير كافة الأقسام")
             if not df_all_files.empty:
                 st.dataframe(df_all_files, use_container_width=True)
             else:
-                st.info("لم يتم رفع أي مستندات أو تقارير من الأقسام حتى الآن.")
+                st.info("لم يتم رفع أي مستندات أو تقارير من الأقسام حتى اللحظة.")
 
-        with tab_tickets:
-            st.subheader("🛠️ إبلاغات ومشاكل الأقسام المسجلة (تحديث فوري)")
+        with exec_tab3:
+            st.subheader("🛠️ مركز بلاغات وأعطال الأقسام التشغيلية")
             if not df_all_tickets.empty:
                 st.dataframe(df_all_tickets, use_container_width=True)
             else:
-                st.info("لا توجد إبلاغات أو أعطال مسجلة من الأقسام.")
+                st.info("سجل البلاغات خالٍ تماماً، جميع الأقسام تعمل بكفاءة تامة.")
 
-        with tab_all_data:
-            st.subheader("📋 تفاصيل بيانات الأقسام التشغيلية بالكامل")
-            sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["العقارات والمشاريع", "الموارد البشرية والعمال", "المستثمرين", "المعاملات المالية"])
+        with exec_tab4:
+            st.subheader("📋 تفاصيل وقواعد بيانات الأقسام التنفيذية كاملة")
+            sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["العقارات والمشاريع", "الموارد البشرية", "المستثمرين", "المعاملات المالية"])
             with sub_t1:
                 st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
             with sub_t2:
