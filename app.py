@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 1. إعدادات الصفحة والثيمات
+# 1. إعدادات الصفحة والثيمات المؤسسية
 # ==========================================
 THEMES = {
     "الداكن الملكي والذهبي (Royal Dark & Gold)": {
@@ -421,7 +421,7 @@ else:
                                  (dept_name, uploaded_file.name, st.session_state["username"], str(datetime.date.today())))
                     conn.commit()
                 log_audit_action(st.session_state["username"], dept_name, f"رفع مستند: {uploaded_file.name}")
-                st.success("تم رفع المستند/التقرير بنجاح!")
+                st.success("تم رفع المستند/التقرير بنجاح وتحديث لوحة تحكم الأدمن!")
             
             st.write("#### المستندات والتقارير المرفوعة للقسم:")
             df_files = safe_read_sql("SELECT filename, uploader, upload_date FROM department_files WHERE department = ?", (dept_name,))
@@ -438,14 +438,14 @@ else:
                                          (st.session_state["username"], dept_name, issue_desc, "معلقة", str(datetime.date.today())))
                             conn.commit()
                         log_audit_action(st.session_state["username"], dept_name, f"إبلاغ عن مشكلة: {issue_desc}")
-                        st.success("تم تسجيل الإبلاغ وإرساله بنجاح!")
+                        st.success("تم تسجيل الإبلاغ وإرساله لوحة تحكم الأدمن بنجاح!")
 
     # ==========================================
     # 📊 1. لوحة التحليلات التنفيذية الشاملة (للأدمن فقط)
     # ==========================================
     if selected_page == "📊 لوحة التحليلات التنفيذية":
         st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم التنفيذية الشاملة (جميع الأقسام)</h1>", unsafe_allow_html=True)
-        st.markdown(f"👋 **مرحباً بك يا مدير النظام، {st.session_state['username']}** - متابعة مركزية لبيانات وتقارير كافة الأقسام.")
+        st.markdown(f"👋 **مرحباً بك يا مدير النظام، {st.session_state['username']}** - متابعة مركزية فورية لبيانات وتقارير ومستندات كافة الأقسام.")
 
         # استعلامات تجميعية شاملة لكل أقسام الشركة
         df_fin = safe_read_sql("SELECT trans_type, amount, department FROM financial_transactions")
@@ -464,6 +464,9 @@ else:
         df_inv = safe_read_sql("SELECT investment_amount, total_returns FROM investors")
         total_investments = df_inv["investment_amount"].sum() if not df_inv.empty and "investment_amount" in df_inv.columns else 0.0
 
+        df_all_files = safe_read_sql("SELECT department, filename, uploader, upload_date FROM department_files ORDER BY id DESC")
+        df_all_tickets = safe_read_sql("SELECT id, username, department, issue_text, status, ticket_date FROM support_tickets ORDER BY id DESC")
+
         # مؤشرات الأداء العليا (Metrics)
         m1, m2, m3, m4 = st.columns(4)
         with m1:
@@ -481,9 +484,9 @@ else:
         with m6:
             st.metric("إجمالي أجور العمالة", f"{total_payroll:,.0f} ج.م", delta="الموارد البشرية")
         with m7:
-            st.metric("إجمالي العمال والكوادر", f"{total_workers}", delta="كادر العمل")
+            st.metric("إجمالي التقارير والمستندات", f"{len(df_all_files)} مستند مرفوع", delta="جميع الأقسام")
         with m8:
-            st.metric("العقارات النشطة", f"{prop_count}", delta="مشاريع المجموعة")
+            st.metric("إجمالي الإبلاغات والأعطال", f"{len(df_all_tickets)} إبلاغ", delta="متابعة الأعطال")
 
         st.markdown("---")
 
@@ -514,23 +517,21 @@ else:
                     st.info("لا توجد أنشطة مسجلة حديثاً.")
 
         with tab_files:
-            st.subheader("📁 جميع التقارير والمستندات المرفوعة بواسطة الأقسام")
-            df_all_files = safe_read_sql("SELECT department, filename, uploader, upload_date FROM department_files ORDER BY id DESC")
+            st.subheader("📁 جميع التقارير والمستندات المرفوعة بواسطة الأقسام (تحديث فوري)")
             if not df_all_files.empty:
                 st.dataframe(df_all_files, use_container_width=True)
             else:
                 st.info("لم يتم رفع أي مستندات أو تقارير من الأقسام حتى الآن.")
 
         with tab_tickets:
-            st.subheader("🛠️ إبلاغات ومشاكل الأقسام المسجلة")
-            df_all_tickets = safe_read_sql("SELECT id, username, department, issue_text, status, ticket_date FROM support_tickets ORDER BY id DESC")
+            st.subheader("🛠️ إبلاغات ومشاكل الأقسام المسجلة (تحديث فوري)")
             if not df_all_tickets.empty:
                 st.dataframe(df_all_tickets, use_container_width=True)
             else:
                 st.info("لا توجد إبلاغات أو أعطال مسجلة من الأقسام.")
 
         with tab_all_data:
-            st.subheader("📋 تفاصيل بيانات الأقسام التشغيلية")
+            st.subheader("📋 تفاصيل بيانات الأقسام التشغيلية بالكامل")
             sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["العقارات والمشاريع", "الموارد البشرية والعمال", "المستثمرين", "المعاملات المالية"])
             with sub_t1:
                 st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
