@@ -6,35 +6,502 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 1. إعدادات الصفحة والثيمات
+# 1. إعدادات الصفحة والثيمات المؤسسية
 # ==========================================
 THEMES = {
     "الداكن الملكي والذهبي (Royal Dark & Gold)": {
-        "primary": "#D97706", "bg": "#0F172A", "card": "#1E293B", "text": "#F8FAFC", "accent": "#F59E0B", "border": "#334155",
+        "primary": "#D97706",
+        "bg": "#0F172A",
+        "card": "#1E293B",
+        "text": "#F8FAFC",
+        "accent": "#F59E0B",
+        "border": "#334155",
     },
     "أزرق نيلي احترافي (Modern Indigo)": {
-        "primary": "#4F46E5", "bg": "#F8FAFC", "card": "#FFFFFF", "text": "#1E293B", "accent": "#6366F1", "border": "#E2E8F0",
+        "primary": "#4F46E5",
+        "bg": "#F8FAFC",
+        "card": "#FFFFFF",
+        "text": "#1E293B",
+        "accent": "#6366F1",
+        "border": "#E2E8F0",
     },
 }
 
-st.set_page_config(page_title="MH Group ERP System - Enterprise Edition", page_icon="🏢", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="MH Group ERP System - Enterprise Edition",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if "selected_theme" not in st.session_state:
     st.session_state["selected_theme"] = "الداكن الملكي والذهبي (Royal Dark & Gold)"
 
 current_theme = THEMES.get(st.session_state["selected_theme"], THEMES["الداكن الملكي والذهبي (Royal Dark & Gold)"])
 
-st.markdown(f"""
+st.markdown(
+    f"""
 <style>
-    .stApp {{ background-color: {current_theme["bg"]} !important; color: {current_theme["text"]} !important; }}
-    .main-header {{ font-size: 1.8rem; font-weight: 800; color: {current_theme["primary"]} !important; text-align: right; margin-bottom: 15px; padding: 10px; border-bottom: 2px solid {current_theme["accent"]}; background-color: {current_theme["card"]}; border-radius: 8px; }}
-    div[data-testid="stMetric"] {{ background-color: {current_theme["card"]} !important; padding: 15px !important; border-radius: 12px !important; border: 1px solid {current_theme["border"]} !important; }}
-    .stButton>button {{ background-color: {current_theme["primary"]} !important; color: white !important; font-weight: bold !important; }}
-    .executive-card {{ background-color: {current_theme["card"]}; padding: 20px; border-radius: 12px; border: 1px solid {current_theme["border"]}; margin-bottom: 20px; }}
+    .stApp {{
+        background-color: {current_theme["bg"]} !important;
+        color: {current_theme["text"]} !important;
+    }}
+    .main-header {{
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: {current_theme["primary"]} !important;
+        text-align: right;
+        margin-bottom: 15px;
+        padding: 10px;
+        border-bottom: 2px solid {current_theme["accent"]};
+        background-color: {current_theme["card"]};
+        border-radius: 8px;
+    }}
+    div[data-testid="stMetric"] {{
+        background-color: {current_theme["card"]} !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
+        border: 1px solid {current_theme["border"]} !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }}
+    section[data-testid="stSidebar"] {{
+        background-color: {current_theme["card"]} !important;
+        border-right: 1px solid {current_theme["border"]} !important;
+    }}
+    .stButton>button {{
+        background-color: {current_theme["primary"]} !important;
+        color: white !important;
+        border-radius: 6px !important;
+        border: none !important;
+        font-weight: bold !important;
+    }}
+    .executive-card {{
+        background-color: {current_theme["card"]};
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid {current_theme["border"]};
+        margin-bottom: 20px;
+    }}
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 UPLOAD_DIR = "uploads_data"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ==========================================
+# 2. قاعدة البيانات والجداول والهجرة التلقائية
+# ==========================================
+def init_db():
+    with sqlite3.connect("mh_group_erp.db") as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password TEXT,
+                role TEXT,
+                phone TEXT,
+                email TEXT,
+                avatar_path TEXT
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                login_time TEXT,
+                logout_time TEXT,
+                ip_address TEXT,
+                status TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS financial_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trans_type TEXT,
+                department TEXT,
+                amount REAL,
+                description TEXT,
+                trans_date TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                custom_id TEXT UNIQUE,
+                name TEXT,
+                emp_type TEXT,
+                craft_type TEXT,
+                hourly_rate REAL,
+                daily_rate REAL,
+                workers_count INTEGER DEFAULT 1,
+                total_pay REAL,
+                hire_date TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS properties (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                custom_id TEXT UNIQUE,
+                name TEXT,
+                location TEXT,
+                price REAL,
+                expenses REAL DEFAULT 0.0,
+                sale_price REAL DEFAULT 0.0,
+                status TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS investors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                property_custom_id TEXT,
+                investment_amount REAL,
+                investment_ratio REAL,
+                return_rate REAL,
+                total_returns REAL,
+                start_date TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                department TEXT,
+                action TEXT,
+                status TEXT,
+                ip_address TEXT,
+                timestamp TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS department_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                department TEXT,
+                filename TEXT,
+                uploader TEXT,
+                upload_date TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS support_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                department TEXT,
+                issue_text TEXT,
+                status TEXT,
+                ticket_date TEXT
+            )
+        """)
+
+        migrations = [
+            ("users", "phone", "TEXT"),
+            ("users", "email", "TEXT"),
+            ("users", "avatar_path", "TEXT"),
+            ("employees", "custom_id", "TEXT"),
+            ("employees", "name", "TEXT"),
+            ("employees", "emp_type", "TEXT"),
+            ("employees", "craft_type", "TEXT"),
+            ("employees", "hourly_rate", "REAL"),
+            ("employees", "daily_rate", "REAL"),
+            ("employees", "workers_count", "INTEGER DEFAULT 1"),
+            ("employees", "total_pay", "REAL"),
+            ("employees", "hire_date", "TEXT"),
+            ("properties", "custom_id", "TEXT"),
+            ("properties", "name", "TEXT"),
+            ("properties", "location", "TEXT"),
+            ("properties", "price", "REAL"),
+            ("properties", "expenses", "REAL DEFAULT 0.0"),
+            ("properties", "sale_price", "REAL DEFAULT 0.0"),
+            ("properties", "status", "TEXT"),
+        ]
+        
+        for table, col, col_type in migrations:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+            except sqlite3.OperationalError:
+                pass
+
+        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        if not cursor.fetchone():
+            cursor.execute("INSERT INTO users (username, password, role, phone, email, avatar_path) VALUES ('admin', 'admin123', 'Admin', '01000000000', 'admin@mhgroup.com', '')")
+
+        conn.commit()
+
+init_db()
+
+def safe_read_sql(query, params=()):
+    try:
+        with sqlite3.connect("mh_group_erp.db") as conn:
+            return pd.read_sql_query(query, conn, params=params)
+    except Exception:
+        return pd.DataFrame()
+
+def log_audit_action(username, department, action, status="ناجحة"):
+    try:
+        ip = "127.0.0.1"
+        if hasattr(st, "context") and hasattr(st.context, "headers"):
+            headers = st.context.headers
+            if "X-Forwarded-For" in headers:
+                ip = headers["X-Forwarded-For"].split(",")[0]
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with sqlite3.connect("mh_group_erp.db") as conn:
+            conn.execute(
+                "INSERT INTO audit_logs (username, department, action, status, ip_address, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                (username, department, action, status, ip, now)
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+# ==========================================
+# 3. تسجيل الدخول
+# ==========================================
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "user_role" not in st.session_state:
+    st.session_state["user_role"] = ""
+if "username" not in st.session_state:
+    st.session_state["username"] = ""
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = None
+
+def login_page():
+    st.markdown("<h1 class='main-header' style='text-align: center;'>🏢 مجموعة شركات MH Group ERP</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.subheader("🔐 بوابة الدخول الموحدة للمجموعة")
+        # تم إضافة مفاتيح فريدة (keys) هنا لمنع خطأ التكرار
+        username_input = st.text_input("اسم المستخدم", key="login_username_input")
+        password_input = st.text_input("كلمة المرور", type="password", key="login_password_input")
+
+        if st.button("تسجيل الدخول", use_container_width=True):
+            un = username_input.strip()
+            pw = password_input.strip()
+            with sqlite3.connect("mh_group_erp.db") as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT role FROM users WHERE username = ? AND password = ?", (un, pw))
+                res = cursor.fetchone()
+
+            if res:
+                st.session_state["logged_in"] = True
+                st.session_state["user_role"] = res[0]
+                st.session_state["username"] = un
+
+                login_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with sqlite3.connect("mh_group_erp.db") as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "INSERT INTO user_sessions (username, login_time, logout_time, ip_address, status) VALUES (?, ?, ?, ?, ?)",
+                        (un, login_now, "نشطة حالياً", "127.0.0.1", "نشطة")
+                    )
+                    conn.commit()
+                    st.session_state["session_id"] = cur.lastrowid
+
+                log_audit_action(un, "الدخول", f"تسجيل دخول بصلاحية: {res[0]}")
+                st.success("تم تسجيل الدخول بنجاح!")
+                st.rerun()
+            else:
+                st.error("بيانات الدخول غير صحيحة!")
+
+if not st.session_state["logged_in"]:
+    login_page()
+else:
+    user_rec = safe_read_sql("SELECT phone, email, avatar_path FROM users WHERE username = ?", (st.session_state["username"],))
+    user_avatar = user_rec.iloc[0]["avatar_path"] if not user_rec.empty and "avatar_path" in user_rec.columns and user_rec.iloc[0]["avatar_path"] else None
+
+    st.sidebar.title("🏢 MH Group ERP")
+    if user_avatar and os.path.exists(user_avatar):
+        st.sidebar.image(user_avatar, width=80)
+    st.sidebar.markdown(f"**المستخدم:** `{st.session_state['username']}`\n\n**الصلاحية:** `{st.session_state['user_role']}`")
+
+    role = st.session_state["user_role"]
+    allowed_pages = []
+
+    if role == "Admin":
+        allowed_pages = [
+            "📊 لوحة التحليلات التنفيذية",
+            "⚙️ المستخدمون والجلسات والـ IP",
+            "💰 الإدارة المالية",
+            "👷 الموارد البشرية",
+            "🏢 العقارات والمشاريع",
+            "🤝 المستثمرين",
+            "⏱️ سجل العمليات",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "HR":
+        allowed_pages = [
+            "👷 الموارد البشرية",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "Finance":
+        allowed_pages = [
+            "💰 الإدارة المالية",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "RealEstate":
+        allowed_pages = [
+            "🏢 العقارات والمشاريع",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    elif role == "Investor":
+        allowed_pages = [
+            "🤝 المستثمرين",
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+    else:
+        allowed_pages = [
+            "👤 الملف الشخصي",
+            "🎨 الثيمات والألوان"
+        ]
+
+    selected_page = st.sidebar.radio("الأقسام:", allowed_pages)
+
+    if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True):
+        if st.session_state["session_id"]:
+            logout_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with sqlite3.connect("mh_group_erp.db") as conn:
+                conn.execute("UPDATE user_sessions SET logout_time = ?, status = 'منتهية' WHERE id = ?", (logout_now, st.session_state["session_id"]))
+                conn.commit()
+        log_audit_action(st.session_state["username"], "خروج", "تسجيل خروج آمن")
+        st.session_state["logged_in"] = False
+        st.session_state["session_id"] = None
+        st.rerun()
+
+    # ==========================================
+    # 📊 اللوحة الرئيسية التنفيذية المعاد تصميمها باحترافية كاملة
+    # ==========================================
+    if selected_page == "📊 لوحة التحليلات التنفيذية":
+        st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم التنفيذية الشاملة (MH Group)</h1>", unsafe_allow_html=True)
+        
+        st.markdown(
+            f"""
+            <div class='executive-card'>
+                <h3 style='margin-top: 0; color: {current_theme["primary"]};'>مرحباً سيادة المدير، {st.session_state['username']}</h3>
+                <p style='margin-bottom: 0; color: {current_theme["text"]};'>نظام الإدارة المركزي لشركة <b>MH Group للاستثمار والتطوير العقاري</b> - متابعة فورية لكافة الأقسام، التدفقات المالية، الأصول العقارية، والموارد البشرية.</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+        df_fin = safe_read_sql("SELECT trans_type, amount, department FROM financial_transactions")
+        tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
+        tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
+        net_prof = tot_inc - tot_exp
+
+        df_props = safe_read_sql("SELECT price, name, location, sale_price, status FROM properties")
+        prop_val = df_props["price"].sum() if not df_props.empty else 0.0
+        prop_count = len(df_props)
+
+        df_emp = safe_read_sql("SELECT workers_count, total_pay FROM employees")
+        total_workers = df_emp["workers_count"].sum() if not df_emp.empty and "workers_count" in df_emp.columns else len(df_emp)
+        total_payroll = df_emp["total_pay"].sum() if not df_emp.empty and "total_pay" in df_emp.columns else 0.0
+
+        df_inv = safe_read_sql("SELECT investment_amount, total_returns FROM investors")
+        total_investments = df_inv["investment_amount"].sum() if not df_inv.empty and "investment_amount" in df_inv.columns else 0.0
+
+        st.subheader("📌 المؤشرات المالية والاستثمارية العليا")
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حسابات الإدارة")
+        with m2:
+            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="حسابات الإدارة")
+        with m3:
+            st.metric("صافي الأرباح التشغيلية", f"{net_prof:,.0f} ج.م", delta="العائد الصافي")
+        with m4:
+            st.metric("إجمالي الاستثمارات", f"{total_investments:,.0f} ج.م", delta="رأس المال المستثمر")
+
+        st.markdown("---")
+
+        # التبويبات مع الاستعلامات اللحظية لضمان ظهور المستندات والبلاغات فور رفعها
+        tab_ex1, tab_ex2, tab_ex3, tab_ex4 = st.tabs([
+            "📊 التحليلات والرسوم", 
+            "📁 أرشيف مستندات الأقسام", 
+            "🛠️ مركز بلاغات الأعطال", 
+            "📋 السجلات الشاملة"
+        ])
+
+        with tab_ex1:
+            st.subheader("📈 تتبع حركة المعاملات المالية")
+            if not df_fin.empty:
+                st.line_chart(df_fin, y="amount")
+            else:
+                st.info("لا توجد معاملات مالية مسجلة حتى الآن.")
+
+        with tab_ex2:
+            st.subheader("📁 الأرشيف المركزي: مستندات وتقارير كافة الأقسام")
+            df_files_now = safe_read_sql("SELECT department, filename, uploader, upload_date FROM department_files ORDER BY id DESC")
+            if not df_files_now.empty:
+                st.dataframe(df_files_now, use_container_width=True)
+            else:
+                st.info("لا توجد مستندات مرفوعة من الأقسام حتى الآن.")
+
+        with tab_ex3:
+            st.subheader("🛠️ مركز بلاغات وأعطال الأقسام")
+            df_tickets_now = safe_read_sql("SELECT id, username, department, issue_text, status, ticket_date FROM support_tickets ORDER BY id DESC")
+            if not df_tickets_now.empty:
+                st.dataframe(df_tickets_now, use_container_width=True)
+            else:
+                st.info("سجل البلاغات خالٍ تماماً.")
+
+        with tab_ex4:
+            st.subheader("📋 تفاصيل وقواعد بيانات الأقسام")
+            sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["العقارات", "الموارد البشرية", "المستثمرين", "المالية"])
+            with sub_t1:
+                st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
+            with sub_t2:
+                st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
+            with sub_t3:
+                st.dataframe(safe_read_sql("SELECT * FROM investors"), use_container_width=True)
+            with sub_t4:
+                st.dataframe(safe_read_sql("SELECT * FROM financial_transactions"), use_container_width=True)
+
+    elif selected_page == "⚙️ المستخدمون والجلسات والـ IP":
+        st.markdown("<h1 class='main-header'>⚙️ إدارة المستخدمين وجلسات العمل وعناوين الـ IP</h1>", unsafe_allow_html=True)
+        st.subheader("قائمة المستخدمين المسجلين")
+        st.dataframe(safe_read_sql("SELECT id, username, role, phone, email FROM users"), use_container_width=True)
+        
+        st.subheader("سجل جلسات المستخدمين وعناوين الـ IP")
+        st.dataframe(safe_read_sql("SELECT * FROM user_sessions ORDER BY id DESC"), use_container_width=True)
+
+    elif selected_page == "💰 الإدارة المالية":
+        def fin_content():
+            with st.form("fin_trans_form"):
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    t_type = st.selectbox("نوع المعاملة", ["واردات (إيرادات)", "صادرات (مصروفات)"])
+                    amount = st.number_input("المبلغ (ج.م)", min_value=0.0, step=100.0)
+                with col_f2:
+                    dept = st.selectbox("القسم المرتبط", ["المالية", "العقارات", "الموارد البشرية", "الإدارة العليا"])
+                    desc = st.text_input("وصف المعاملة المالية")
+                
+                if st.form_submit_button("حفظ وإضافة المعاملة المالية"):
+                    if amount > 0:
+                        with sqlite3.connect("mh_group_erp.db") as conn:
+                            conn.execute("INSERT INTO financial_transactions (trans_type, department, amount, description, trans_date) VALUES (?, ?, ?, ?, ?)",
+                                         (t_type, dept, amount, desc, str(datetime.date.today())))
+                            conn.commit()
+                        log_audit_action(st.session_state["username"], "المالية", f"إضافة معاملة مالية بقيمة {amount}")
+                        st.success("تم تسجيل المعاملة المالية بنجاح!")
+                    else:
+                        st.warning("يرجى إدخال مبلغ صحيح أكبر من صفر.")
+           UPLOAD_DIR = "uploads_data"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ==========================================
