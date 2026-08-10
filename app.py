@@ -83,12 +83,13 @@ UPLOAD_DIR = "uploads_data"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ==========================================
-# 2. قاعدة البيانات والجداول والتحديثات
+# 2. قاعدة البيانات والجداول والهجرة التلقائية
 # ==========================================
 def init_db():
     with sqlite3.connect("mh_group_erp.db") as conn:
         cursor = conn.cursor()
 
+        # إنشاء الجداول الأساسية
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,13 +102,6 @@ def init_db():
             )
         """)
         
-        # التحديث التلقائي للأعمدة في حال كان الداتا بأساسيات قديمة
-        for col, col_type in [("phone", "TEXT"), ("email", "TEXT"), ("avatar_path", "TEXT")]:
-            try:
-                cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
-            except sqlite3.OperationalError:
-                pass
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,6 +198,36 @@ def init_db():
             )
         """)
 
+        # الهجرة التلقائية (تحديث الأعمدة للجداول القديمة تلقائياً دون أي فقدان للبيانات)
+        migrations = [
+            ("users", "phone", "TEXT"),
+            ("users", "email", "TEXT"),
+            ("users", "avatar_path", "TEXT"),
+            ("employees", "custom_id", "TEXT"),
+            ("employees", "name", "TEXT"),
+            ("employees", "emp_type", "TEXT"),
+            ("employees", "craft_type", "TEXT"),
+            ("employees", "hourly_rate", "REAL"),
+            ("employees", "daily_rate", "REAL"),
+            ("employees", "workers_count", "INTEGER DEFAULT 1"),
+            ("employees", "total_pay", "REAL"),
+            ("employees", "hire_date", "TEXT"),
+            ("properties", "custom_id", "TEXT"),
+            ("properties", "name", "TEXT"),
+            ("properties", "location", "TEXT"),
+            ("properties", "price", "REAL"),
+            ("properties", "expenses", "REAL DEFAULT 0.0"),
+            ("properties", "sale_price", "REAL DEFAULT 0.0"),
+            ("properties", "status", "TEXT"),
+        ]
+        
+        for table, col, col_type in migrations:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+            except sqlite3.OperationalError:
+                pass
+
+        # إنشاء حساب الأدمن الافتراضي إذا لم يكن موجوداً
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
             cursor.execute("INSERT INTO users (username, password, role, phone, email, avatar_path) VALUES ('admin', 'admin123', 'Admin', '01000000000', 'admin@mhgroup.com', '')")
@@ -353,7 +377,7 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # دالة موحدة لخدمات القسم المنفصلة (مع عرض معلومات الحساب المسجلة من الأدمن للقراءة فقط)
+    # دالة موحدة لخدمات القسم (عرض بيانات الحساب للقراءة فقط داخل الأقسام)
     def render_department_workspace(dept_name, core_content_func):
         st.markdown(f"<h1 class='main-header'>🏢 قسم: {dept_name}</h1>", unsafe_allow_html=True)
         
@@ -368,7 +392,7 @@ else:
             core_content_func()
             
         with t_prof:
-            st.markdown(f"### 👤 بيانات الحساب والصورة الشخصية (معلومات مسجلة من الإدارة)")
+            st.markdown(f"### 👤 بيانات الحساب والصورة الشخصية (مسجلة من الإدارة - للقراءة فقط)")
             curr = st.session_state["username"]
             df_u = safe_read_sql("SELECT username, phone, email, role, avatar_path FROM users WHERE username = ?", (curr,))
             if df_u.empty:
@@ -380,9 +404,9 @@ else:
                 if av and os.path.exists(av):
                     st.image(av, width=130, caption="الصورة الشخصية الحالية")
                 else:
-                    st.info("لا توجد صورة شخصية مرفوعة. يمكنك رفعها من قسم (الملف الشخصي).")
+                    st.info("لا توجد صورة شخصية مرفوعة.")
             with c_txt:
-                st.info("⚠️ هذه المعلومات معرفة ومسجلة بواسطة الإدارة ولا يمكن تعديلها من هذه الشاشة.")
+                st.info("⚠️ هذه المعلومات مسجلة بمعرفة الإدارة ولا يمكن تعديلها من هذه الشاشة.")
                 st.markdown(f"**اسم المستخدم:** `{df_u.iloc[0]['username']}`")
                 st.markdown(f"**الصلاحية:** `{df_u.iloc[0]['role']}`")
                 st.markdown(f"**رقم الهاتف:** `{df_u.iloc[0]['phone'] if 'phone' in df_u.columns and df_u.iloc[0]['phone'] else 'غير متوفر'}`")
@@ -466,7 +490,7 @@ else:
                 st.info("لا توجد أنشطة مسجلة حديثاً.")
 
     # ==========================================
-    # 👤 الملف الشخصي (إدارة البيانات، البريد، الهاتف، الصورة، كلمة المرور)
+    # 👤 الملف الشخصي
     # ==========================================
     elif selected_page == "👤 الملف الشخصي":
         st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
@@ -549,7 +573,7 @@ else:
             st.rerun()
 
     # ==========================================
-    # ⚙️ المستخدمون والجلسات والـ IP (خاص بالأدمن فقط)
+    # ⚙️ المستخدمون والجلسات والـ IP (خاص بالأدمن)
     # ==========================================
     elif selected_page == "⚙️ المستخدمون والجلسات والـ IP":
         st.markdown("<h1 class='main-header'>⚙️ إدارة المستخدمين والجلسات النشطة والـ IP</h1>", unsafe_allow_html=True)
