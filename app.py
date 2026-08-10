@@ -305,28 +305,24 @@ else:
     elif role == "HR":
         allowed_pages.extend([
             "👷 الموارد البشرية",
-            "📌 لوحة خدمات الموارد البشرية",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
         ])
     elif role == "Finance":
         allowed_pages.extend([
             "💰 الإدارة المالية",
-            "📌 لوحة خدمات الإدارة المالية",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
         ])
     elif role == "RealEstate":
         allowed_pages.extend([
             "🏢 العقارات والمشاريع",
-            "📌 لوحة خدمات العقارات والمشاريع",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
         ])
     elif role == "Investor":
         allowed_pages.extend([
             "🤝 المستثمرين",
-            "📌 لوحة خدمات المستثمرين",
             "👤 الملف الشخصي",
             "🎨 الثيمات والألوان"
         ])
@@ -349,12 +345,23 @@ else:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # دالة موحدة لخدمات القسم (تستخدم للمستخدمين العاديين، أو كـ تبويب داخل أقسام الأدمن)
-    def render_department_services_content(dept_name):
-        st.markdown(f"### 📌 لوحة خدمات وتسهيلات قسم: {dept_name}")
-        t1, t2, t3 = st.tabs(["👤 الملف الشخصي السريع", "📁 رفع تقارير ومستندات القسم", "🛠️ الإبلاغ عن مشكلة بالقسم"])
+    # دالة موحدة لخدمات القسم (تظهر اسم القسم، الملف الشخصي السريع، رفع التقارير، والإبلاغ عن مشكلة داخل القسم مباشرة)
+    def render_department_workspace(dept_name, core_content_func):
+        st.markdown(f"<h1 class='main-header'>🏢 قسم: {dept_name}</h1>", unsafe_allow_html=True)
         
-        with t1:
+        # التبويبات الداخلية لكل قسم لتشمل العمليات والخدمات الخاصة بالقسم
+        t_op, t_prof, t_files, t_iss = st.tabs([
+            f"📋 عمليات {dept_name}", 
+            "👤 الملف الشخصي السريع", 
+            "📁 رفع تقارير ومستندات القسم", 
+            "🛠️ الإبلاغ عن مشكلة بالقسم"
+        ])
+        
+        with t_op:
+            core_content_func()
+            
+        with t_prof:
+            st.markdown(f"### 👤 الملف الشخصي السريع - {dept_name}")
             curr = st.session_state["username"]
             df_u = safe_read_sql("SELECT username, phone, role, avatar_path FROM users WHERE username = ?", (curr,))
             if not df_u.empty:
@@ -370,8 +377,9 @@ else:
                     st.write(f"**الصلاحية:** {df_u.iloc[0]['role']}")
                     st.write(f"**الهاتف:** {df_u.iloc[0]['phone']}")
 
-        with t2:
-            uploaded_file = st.file_uploader(f"رفع مستند أو تقرير جديد لـ {dept_name}", key=f"up_{dept_name}_{random.randint(1,1000)}")
+        with t_files:
+            st.markdown(f"### 📁 رفع تقارير ومستندات قسم: {dept_name}")
+            uploaded_file = st.file_uploader(f"رفع مستند أو تقرير لـ {dept_name}", key=f"up_{dept_name}_{random.randint(1,1000)}")
             if uploaded_file:
                 filepath = os.path.join(UPLOAD_DIR, uploaded_file.name)
                 with open(filepath, "wb") as f:
@@ -386,7 +394,8 @@ else:
             df_files = safe_read_sql("SELECT filename, uploader, upload_date FROM department_files WHERE department = ?", (dept_name,))
             st.dataframe(df_files, use_container_width=True)
 
-        with t3:
+        with t_iss:
+            st.markdown(f"### 🛠️ الإبلاغ عن مشكلة في قسم: {dept_name}")
             with st.form(f"issue_form_{dept_name}_{random.randint(1,1000)}"):
                 issue_desc = st.text_area("تفاصيل المشكلة أو العطل التقني في القسم")
                 if st.form_submit_button("إرسال الإبلاغ للإدارة"):
@@ -399,35 +408,77 @@ else:
                         st.success("تم تسجيل الإبلاغ وإرساله بنجاح!")
 
     # ==========================================
-    # 📊 1. لوحة التحليلات التنفيذية
+    # 📊 1. لوحة التحليلات التنفيذية (نفس شكل وتصميم الصورة المطلوبة بمؤشرات وبيانات حقيقية)
     # ==========================================
     if selected_page == "📊 لوحة التحليلات التنفيذية":
         st.markdown(f"<h1 class='main-header'>🏢 لوحة التحكم</h1>", unsafe_allow_html=True)
         st.markdown(f"👋 **مرحباً بك، {st.session_state['username']}**")
 
+        # حساب البيانات الحقيقية من قواعد البيانات
         df_fin = safe_read_sql("SELECT trans_type, amount FROM financial_transactions")
         tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
         tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
         net_prof = tot_inc - tot_exp
 
-        df_props = safe_read_sql("SELECT price FROM properties")
+        df_props = safe_read_sql("SELECT price, name, location, sale_price, status FROM properties")
         prop_val = df_props["price"].sum() if not df_props.empty else 0.0
         prop_count = len(df_props)
 
+        # 1. الصف العلوي للكروت (مطابق للصورة)
         m1, m2, m3, m4, m5 = st.columns(5)
         with m1:
-            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م")
+            st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f} ج.م", delta="حقيقي من النظام")
         with m2:
-            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م")
+            st.metric("إجمالي المصروفات", f"{tot_exp:,.0f} ج.م", delta="حقيقي من النظام")
         with m3:
-            st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م")
+            st.metric("صافي الأرباح", f"{net_prof:,.0f} ج.م", delta="صافي العمليات")
         with m4:
-            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م")
+            st.metric("قيمة العقارات", f"{prop_val:,.0f} ج.م", delta="إجمالي قيمة الأصول")
         with m5:
-            st.metric("العقارات المسجلة", f"{prop_count}")
+            st.metric("العقارات المسجلة", f"{prop_count}", delta="عقار نشط")
+
+        st.markdown("---")
+
+        # 2. القسم الأوسط: الرسم البياني والنشاط الأخير
+        c_chart, c_activity = st.columns([2, 1])
+        with c_chart:
+            st.subheader("📈 نظرة عامة على الأداء المالي")
+            if not df_fin.empty:
+                st.line_chart(df_fin, y="amount")
+            else:
+                st.info("لا توجد بيانات مالية كافية لعرض الرسم البياني حالياً.")
+
+        with c_activity:
+            st.subheader("🔔 النشاط الأخير")
+            df_logs = safe_read_sql("SELECT action, timestamp FROM audit_logs ORDER BY id DESC LIMIT 5")
+            if not df_logs.empty:
+                for idx, row in df_logs.iterrows():
+                    st.markdown(f"- **{row['action']}**  \n  <small style='color: gray;'>{row['timestamp']}</small>", unsafe_allow_html=True)
+            else:
+                st.info("لا توجد أنشطة مسجلة حديثاً.")
+
+        st.markdown("---")
+
+        # 3. القسم السفلي: الجداول (العقارات المضافة والمعاملات المالية)
+        c_prop_tbl, c_fin_tbl = st.columns(2)
+        with c_prop_tbl:
+            st.subheader("🏢 أخر العقارات المضافة")
+            df_p_recent = safe_read_sql("SELECT custom_id as 'ID', name as 'اسم العقار', location as 'الموقع', price as 'سعر الشراء', status as 'الحالة' FROM properties ORDER BY id DESC LIMIT 5")
+            if not df_p_recent.empty:
+                st.dataframe(df_p_recent, use_container_width=True)
+            else:
+                st.info("لا توجد عقارات مسجلة.")
+
+        with c_fin_tbl:
+            st.subheader("💰 أخر المعاملات المالية")
+            df_f_recent = safe_read_sql("SELECT trans_type as 'نوع العملية', department as 'القسم', amount as 'المبلغ', trans_date as 'التاريخ' FROM financial_transactions ORDER BY id DESC LIMIT 5")
+            if not df_f_recent.empty:
+                st.dataframe(df_f_recent, use_container_width=True)
+            else:
+                st.info("لا توجد معاملات مالية مسجلة.")
 
     # ==========================================
-    # 👤 الملف الشخصي (مُفعل بالكامل)
+    # 👤 الملف الشخصي (مُفعل بالكامل بدون جلسات قسم)
     # ==========================================
     elif selected_page == "👤 الملف الشخصي":
         st.markdown("<h1 class='main-header'>👤 الملف الشخصي وإعدادات الحساب</h1>", unsafe_allow_html=True)
@@ -494,11 +545,11 @@ else:
             st.rerun()
 
     # ==========================================
-    # ⚙️ المستخدمون والجلسات والـ IP
+    # ⚙️ المستخدمون والجلسات والـ IP (خاص بالأدمن فقط)
     # ==========================================
     elif selected_page == "⚙️ المستخدمون والجلسات والـ IP":
         st.markdown("<h1 class='main-header'>⚙️ إدارة المستخدمين والجلسات النشطة والـ IP</h1>", unsafe_allow_html=True)
-        tab1, tab2, tab3 = st.tabs(["👥 إدارة الحسابات", "➕ إضافة مستخدم", "📡 الجلسات النشطة والـ IP"])
+        tab1, tab2, tab3 = st.tabs(["👥 إدارة الحسابات", "➕ إضافة مستخدم", "📡 الجلسات النشطة وإدارة الـ IP"])
 
         with tab1:
             df_users = safe_read_sql("SELECT id, username, role, phone FROM users")
@@ -535,36 +586,13 @@ else:
             st.dataframe(df_sessions, use_container_width=True)
 
     # ==========================================
-    # 💰 الإدارة المالية (شاملة خدمات القسم للأدمن)
+    # 💰 الإدارة المالية (بمساحة عمل القسم المنفصلة)
     # ==========================================
     elif selected_page == "💰 الإدارة المالية":
-        st.markdown("<h1 class='main-header'>💰 الإدارة المالية</h1>", unsafe_allow_html=True)
-        if role == "Admin":
-            tab_main, tab_serv = st.tabs(["📊 عمليات القسم المالية", "📌 لوحة خدمات الإدارة المالية"])
-            with tab_main:
-                t1, t2 = st.tabs(["💸 تسجيل المصروفات والإيرادات", "📜 كشف الحسابات"])
-                with t1:
-                    with st.form("fin_form"):
-                        ttype = st.selectbox("نوع المعاملة", ["صادرات (مصروفات)", "واردات (إيرادات)"])
-                        tdept = st.selectbox("القسم التابع له", ["العقارات", "الموارد البشرية", "المستثمرين", "عام"])
-                        tamt = st.number_input("المبلغ (EGP)", min_value=0.0)
-                        tdesc = st.text_input("الوصف / البيان")
-                        if st.form_submit_button("حفظ المعاملة"):
-                            if tamt > 0:
-                                with sqlite3.connect("mh_group_erp.db") as conn:
-                                    conn.execute("INSERT INTO financial_transactions (trans_type, department, amount, description, trans_date) VALUES (?, ?, ?, ?, ?)",
-                                                 (ttype, tdept, tamt, tdesc, str(datetime.date.today())))
-                                    conn.commit()
-                                st.success("تم الحفظ بنجاح!")
-                                st.rerun()
-                with t2:
-                    st.dataframe(safe_read_sql("SELECT * FROM financial_transactions ORDER BY id DESC"), use_container_width=True)
-            with tab_serv:
-                render_department_services_content("الإدارة المالية")
-        else:
+        def finance_core():
             t1, t2 = st.tabs(["💸 تسجيل المصروفات والإيرادات", "📜 كشف الحسابات"])
             with t1:
-                with st.form("fin_form_user"):
+                with st.form("fin_form"):
                     ttype = st.selectbox("نوع المعاملة", ["صادرات (مصروفات)", "واردات (إيرادات)"])
                     tdept = st.selectbox("القسم التابع له", ["العقارات", "الموارد البشرية", "المستثمرين", "عام"])
                     tamt = st.number_input("المبلغ (EGP)", min_value=0.0)
@@ -579,47 +607,19 @@ else:
                             st.rerun()
             with t2:
                 st.dataframe(safe_read_sql("SELECT * FROM financial_transactions ORDER BY id DESC"), use_container_width=True)
-
-    elif selected_page == "📌 لوحة خدمات الإدارة المالية":
-        render_department_services_content("الإدارة المالية")
+        
+        render_department_workspace("الإدارة المالية", finance_core)
 
     # ==========================================
-    # 👷 الموارد البشرية (شاملة خدمات القسم للأدمن)
+    # 👷 الموارد البشرية (بمساحة عمل القسم المنفصلة)
     # ==========================================
     elif selected_page == "👷 الموارد البشرية":
-        st.markdown("<h1 class='main-header'>👷 قسم الموارد البشرية والعمالة</h1>", unsafe_allow_html=True)
-        if role == "Admin":
-            tab_main, tab_serv = st.tabs(["📋 سجل الكادر والعمالة", "📌 لوحة خدمات الموارد البشرية"])
-            with tab_main:
-                t1, t2 = st.tabs(["📋 سجل الكادر", "➕ إضافة كادر"])
-                with t1:
-                    st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
-                with t2:
-                    with st.form("add_emp_form"):
-                        cid = st.text_input("ID الفريد", value=f"EMP-{random.randint(1000, 9999)}")
-                        ename = st.text_input("اسم العامل / الموظف")
-                        etype = st.selectbox("الفئة", ["موظف ثابت", "مورد عمال", "عامل مستقل"])
-                        ctype = st.selectbox("التخصص", ["نقاش", "نحات", "عامل", "مشرف", "إداري"])
-                        hrate = st.number_input("سعر الساعة", min_value=0.0)
-                        drate = st.number_input("سعر اليومية", min_value=0.0)
-                        wcnt = st.number_input("عدد العمال", min_value=1, value=1)
-                        tot = (hrate * 8 * wcnt) if hrate > 0 else (drate * wcnt)
-                        if st.form_submit_button("حفظ البيانات"):
-                            if ename:
-                                with sqlite3.connect("mh_group_erp.db") as conn:
-                                    conn.execute("INSERT INTO employees (custom_id, name, emp_type, craft_type, hourly_rate, daily_rate, workers_count, total_pay, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                                 (cid, ename, etype, ctype, hrate, drate, wcnt, tot, str(datetime.date.today())))
-                                    conn.commit()
-                                st.success("تم الحفظ!")
-                                st.rerun()
-            with tab_serv:
-                render_department_services_content("الموارد البشرية")
-        else:
-            t1, t2 = st.tabs(["📋 سجل الكادر", "➕ إضافة كادر"])
+        def hr_core():
+            t1, t2 = st.tabs(["📋 سجل الكادر والعمالة", "➕ إضافة كادر"])
             with t1:
                 st.dataframe(safe_read_sql("SELECT * FROM employees"), use_container_width=True)
             with t2:
-                with st.form("add_emp_form_user"):
+                with st.form("add_emp_form"):
                     cid = st.text_input("ID الفريد", value=f"EMP-{random.randint(1000, 9999)}")
                     ename = st.text_input("اسم العامل / الموظف")
                     etype = st.selectbox("الفئة", ["موظف ثابت", "مورد عمال", "عامل مستقل"])
@@ -637,44 +637,18 @@ else:
                             st.success("تم الحفظ!")
                             st.rerun()
 
-    elif selected_page == "📌 لوحة خدمات الموارد البشرية":
-        render_department_services_content("الموارد البشرية")
+        render_department_workspace("الموارد البشرية", hr_core)
 
     # ==========================================
-    # 🏢 العقارات والمشاريع (شاملة خدمات القسم للأدمن)
+    # 🏢 العقارات والمشاريع (بمساحة عمل القسم المنفصلة)
     # ==========================================
     elif selected_page == "🏢 العقارات والمشاريع":
-        st.markdown("<h1 class='main-header'>🏢 قسم إدارة العقارات والمشاريع</h1>", unsafe_allow_html=True)
-        if role == "Admin":
-            tab_main, tab_serv = st.tabs(["📋 العقارات والمشاريع", "📌 لوحة خدمات العقارات والمشاريع"])
-            with tab_main:
-                t1, t2 = st.tabs(["📋 العقارات المسجلة", "➕ إضافة عقار"])
-                with t1:
-                    st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
-                with t2:
-                    with st.form("add_prop_f"):
-                        pid = st.text_input("ID العقار", value=f"PROP-{random.randint(100, 999)}")
-                        pname = st.text_input("اسم المشروع / العقار")
-                        ploc = st.text_input("الموقع")
-                        pprice = st.number_input("سعر الشراء", min_value=0.0)
-                        pexp = st.number_input("المصروفات", min_value=0.0)
-                        psale = st.number_input("سعر البيع المتوقع", min_value=0.0)
-                        if st.form_submit_button("حفظ العقار"):
-                            if pname:
-                                with sqlite3.connect("mh_group_erp.db") as conn:
-                                    conn.execute("INSERT INTO properties (custom_id, name, location, price, expenses, sale_price, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                                 (pid, pname, ploc, pprice, pexp, psale, "متاح"))
-                                    conn.commit()
-                                st.success("تم الحفظ!")
-                                st.rerun()
-            with tab_serv:
-                render_department_services_content("العقارات والمشاريع")
-        else:
+        def real_estate_core():
             t1, t2 = st.tabs(["📋 العقارات المسجلة", "➕ إضافة عقار"])
             with t1:
                 st.dataframe(safe_read_sql("SELECT * FROM properties"), use_container_width=True)
             with t2:
-                with st.form("add_prop_f_user"):
+                with st.form("add_prop_f"):
                     pid = st.text_input("ID العقار", value=f"PROP-{random.randint(100, 999)}")
                     pname = st.text_input("اسم المشروع / العقار")
                     ploc = st.text_input("الموقع")
@@ -690,48 +664,20 @@ else:
                             st.success("تم الحفظ!")
                             st.rerun()
 
-    elif selected_page == "📌 لوحة خدمات العقارات والمشاريع":
-        render_department_services_content("العقارات والمشاريع")
+        render_department_workspace("العقارات والمشاريع", real_estate_core)
 
     # ==========================================
-    # 🤝 المستثمرين (شاملة خدمات القسم للأدمن)
+    # 🤝 المستثمرين (بمساحة عمل القسم المنفصلة)
     # ==========================================
     elif selected_page == "🤝 المستثمرين":
-        st.markdown("<h1 class='main-header'>🤝 قسم المستثمرين وحساب الأرباح</h1>", unsafe_allow_html=True)
-        if role == "Admin":
-            tab_main, tab_serv = st.tabs(["📋 المستثمرين والأرباح", "📌 لوحة خدمات المستثمرين"])
-            with tab_main:
-                t1, t2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر"])
-                with t1:
-                    st.dataframe(safe_read_sql("SELECT * FROM investors ORDER BY id DESC"), use_container_width=True)
-                with t2:
-                    df_props = safe_read_sql("SELECT custom_id FROM properties")
-                    prop_options = df_props["custom_id"].tolist() if not df_props.empty else ["عام"]
-                    with st.form("add_investor_form"):
-                        inv_name = st.text_input("اسم المستثمر")
-                        prop_id = st.selectbox("العقار المرتبط", prop_options)
-                        inv_amt = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
-                        inv_ratio = st.number_input("نسبة المشاركة (%)", min_value=0.0, max_value=100.0)
-                        return_rate = st.number_input("نسبة العائد المتوقع (%)", min_value=0.0)
-                        tot_returns = inv_amt * (1 + (return_rate / 100))
-                        if st.form_submit_button("حفظ بيانات المستثمر"):
-                            if inv_name and inv_amt > 0:
-                                with sqlite3.connect("mh_group_erp.db") as conn:
-                                    conn.execute("INSERT INTO investors (name, property_custom_id, investment_amount, investment_ratio, return_rate, total_returns, start_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                                 (inv_name, prop_id, inv_amt, inv_ratio, return_rate, tot_returns, str(datetime.date.today())))
-                                    conn.commit()
-                                st.success("تم الحفظ!")
-                                st.rerun()
-            with tab_serv:
-                render_department_services_content("المستثمرين")
-        else:
+        def investors_core():
             t1, t2 = st.tabs(["📋 سجل المستثمرين", "➕ إضافة مستثمر"])
             with t1:
                 st.dataframe(safe_read_sql("SELECT * FROM investors ORDER BY id DESC"), use_container_width=True)
             with t2:
                 df_props = safe_read_sql("SELECT custom_id FROM properties")
                 prop_options = df_props["custom_id"].tolist() if not df_props.empty else ["عام"]
-                with st.form("add_investor_form_user"):
+                with st.form("add_investor_form"):
                     inv_name = st.text_input("اسم المستثمر")
                     prop_id = st.selectbox("العقار المرتبط", prop_options)
                     inv_amt = st.number_input("مبلغ الاستثمار (EGP)", min_value=0.0)
@@ -747,11 +693,10 @@ else:
                             st.success("تم الحفظ!")
                             st.rerun()
 
-    elif selected_page == "📌 لوحة خدمات المستثمرين":
-        render_department_services_content("المستثمرين")
+        render_department_workspace("المستثمرين", investors_core)
 
     # ==========================================
-    # ⏱️ سجل العمليات
+    # ⏱️ سجل العمليات (Audit Trail)
     # ==========================================
     elif selected_page == "⏱️ سجل العمليات":
         st.markdown("<h1 class='main-header'>⏱️ سجل العمليات والأنشطة (Audit Trail)</h1>", unsafe_allow_html=True)
