@@ -165,7 +165,6 @@ def init_db():
         for table_sql in tables:
             cursor.execute(table_sql)
             
-        # إنشاء حساب المدير الافتراضي إذا لم يكن موجوداً
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
             cursor.execute(
@@ -204,7 +203,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     st.markdown("""
         <div style="display: flex; justify-content: center; align-items: center; height: 85vh;">
-            <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,00,0,0.1); width: 600px; text-align: right;">
+            <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 600px; text-align: right;">
                 <h2 style="color: #0A1128; font-weight: 800; margin-bottom: 5px;">Sign In</h2>
                 <p style="color: #64748B; margin-bottom: 25px;">Welcome back! Please login to your account</p>
     """, unsafe_allow_html=True)
@@ -246,7 +245,7 @@ if not st.session_state["logged_in"]:
 
 else:
     # ==========================================
-    # 4. القائمة الجانبية والروابط (مطابقة للصورة تماماً)
+    # 4. القائمة الجانبية والروابط
     # ==========================================
     st.sidebar.markdown("""
         <div style="text-align: center; padding: 10px 0 20px 0; border-bottom: 1px solid #1E293B;">
@@ -289,7 +288,6 @@ else:
         with c_head2:
             st.info(f"📅 {datetime.date.today().strftime('%d/%m/%Y')} - {datetime.date.today().replace(day=1).strftime('%d/%m/%Y')}")
 
-        # جسابات الإحصائيات
         df_fin = safe_read_sql("SELECT trans_type, amount FROM financial_transactions")
         tot_inc = df_fin[df_fin["trans_type"] == "واردات (إيرادات)"]["amount"].sum() if not df_fin.empty else 0.0
         tot_exp = df_fin[df_fin["trans_type"] == "صادرات (مصروفات)"]["amount"].sum() if not df_fin.empty else 0.0
@@ -298,7 +296,6 @@ else:
         df_props = safe_read_sql("SELECT price FROM properties")
         prop_val = df_props["price"].sum() if not df_props.empty else 0.0
 
-        # المرتكزات الأربعة المطابقة للصورة تماماً
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             st.metric("إجمالي الإيرادات", f"{tot_inc:,.0f}", "+12.5% عن الشهر الماضي")
@@ -358,8 +355,8 @@ else:
                             conn.commit()
                         log_audit_action(st.session_state["username"], "المستخدمين", f"إضافة المستخدم: {new_usr}")
                         st.success("تم إضافة المستخدم بنجاح!")
-                    except Exception as e:
-                        st.error(fخطأ: اسم المستخدم موجود مسبقاً أو حدث خطأ تقني.)
+                    except Exception:
+                        st.error("خطأ: اسم المستخدم موجود مسبقاً أو حدث خطأ تقني.")
                 else:
                     st.warning("يرجى إدخال اسم المستخدم وكلمة المرور على الأقل.")
                     
@@ -373,7 +370,7 @@ else:
         st.markdown("<h1 class='main-header'>الإدارة والمعاملات المالية</h1>", unsafe_allow_html=True)
         
         with st.form("trans_form"):
-            st.subheader("إسجال معاملة مالية جديدة")
+            st.subheader("تسجيل معاملة مالية جديدة")
             col1, col2, col3 = st.columns(3)
             with col1:
                 t_type = st.selectbox("نوع المعاملة", ["واردات (إيرادات)", "صادرات (مصروفات)"])
