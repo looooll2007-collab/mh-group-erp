@@ -14,24 +14,18 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling to match Dark/Gold Enterprise Theme
 st.markdown(
     """
     <style>
-    /* Global Background */
     .stApp {
         background-color: #0d1117;
         color: #c9d1d9;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    /* Sidebar Styling */
     section[data-testid="stSidebar"] {
         background-color: #161b22;
         border-right: 1px solid #30363d;
     }
-    
-    /* Gold Accent Buttons & Headers */
     .stButton>button {
         background-color: #c59b27;
         color: #000000;
@@ -46,8 +40,6 @@ st.markdown(
         color: #000000;
         box-shadow: 0px 0px 10px rgba(197, 155, 39, 0.5);
     }
-    
-    /* KPI Cards */
     .kpi-card {
         background-color: #161b22;
         border: 1px solid #30363d;
@@ -56,45 +48,23 @@ st.markdown(
         text-align: right;
         margin-bottom: 15px;
     }
-    .kpi-title {
-        color: #8b949e;
-        font-size: 0.9rem;
-    }
-    .kpi-value {
-        color: #f0f6fc;
-        font-size: 1.6rem;
-        font-weight: bold;
-    }
-    .kpi-sub {
-        color: #3fb950;
-        font-size: 0.8rem;
-    }
-    
-    /* Inputs Styling */
+    .kpi-title { color: #8b949e; font-size: 0.9rem; }
+    .kpi-value { color: #f0f6fc; font-size: 1.6rem; font-weight: bold; }
+    .kpi-sub { color: #3fb950; font-size: 0.8rem; }
     div[data-baseweb="input"] {
         background-color: #0d1117;
         border-color: #30363d;
         color: #ffffff;
     }
-    
-    /* Headers */
-    h1, h2, h3, h4 {
-        color: #d4af37 !important;
-        text-align: right;
-    }
-    
-    /* Tables */
-    .stDataFrame {
-        border: 1px solid #30363d;
-        border-radius: 8px;
-    }
+    h1, h2, h3, h4 { color: #d4af37 !important; text-align: right; }
+    .stDataFrame { border: 1px solid #30363d; border-radius: 8px; }
     </style>
     """,
-    unsafe_allow_dict_style=True,
+    unsafe_allow_html=True,
 )
 
 # ==========================================
-# 2. Session State Initialization (Database Mock)
+# 2. Session State Initialization
 # ==========================================
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -103,7 +73,6 @@ if "user_role" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state["current_user"] = ""
 
-# Sample System Data
 if "users" not in st.session_state:
     st.session_state["users"] = pd.DataFrame(
         [
@@ -111,17 +80,17 @@ if "users" not in st.session_state:
                 "اسم المستخدم": "admin",
                 "كلمة المرور": "admin123",
                 "الدور": "المدير العام",
-                "آخر نشاط": "2024-05-23 10:15:22",
+                "آخر نشاط": "2026-08-14 10:15:22",
                 "عنوان IP": "192.168.1.10",
-                "تاريخ خروج": "2024-05-23 12:00:00",
+                "تاريخ خروج": "2026-08-14 12:00:00",
             },
             {
                 "اسم المستخدم": "ahmed_hr",
                 "كلمة المرور": "hr123",
                 "الدور": "إدارة الموارد البشرية",
-                "آخر نشاط": "2024-05-22 14:30:00",
+                "آخر نشاط": "2026-08-13 14:30:00",
                 "عنوان IP": "192.168.1.15",
-                "تاريخ خروج": "2024-05-22 17:00:00",
+                "تاريخ خروج": "2026-08-13 17:00:00",
             },
         ]
     )
@@ -133,7 +102,7 @@ if "financial_data" not in st.session_state:
                 "نوع العملية": "إيراد",
                 "الجهة": "عميل - شركة النصر",
                 "المبلغ": 850000,
-                "التاريخ": "2024-05-23",
+                "التاريخ": "2026-08-14",
                 "الحالة": "مكتملة",
                 "القسم": "العقارات",
             },
@@ -141,7 +110,7 @@ if "financial_data" not in st.session_state:
                 "نوع العملية": "مصروف",
                 "الجهة": "مورد - مقاولات مصر",
                 "المبلغ": 250000,
-                "التاريخ": "2024-05-23",
+                "التاريخ": "2026-08-14",
                 "الحالة": "مكتملة",
                 "القسم": "المشتريات",
             },
@@ -224,7 +193,7 @@ if "it_team" not in st.session_state:
                 "عدد ساعات العمل": 160,
                 "سعر الساعة": 60,
                 "سعر اليومية": 480,
-                "نوع المستند": "شهادة شهادة أمان شبكات",
+                "نوع المستند": "شهادة أمان شبكات",
             }
         ]
     )
@@ -233,14 +202,14 @@ if "audit_logs" not in st.session_state:
     st.session_state["audit_logs"] = pd.DataFrame(
         [
             {
-                "التاريخ والوقت": "2024-05-23 09:00:00",
+                "التاريخ والوقت": "2026-08-14 09:00:00",
                 "المستخدم": "admin",
                 "القسم": "تسجيل الدخول",
                 "العملية": "دخول ناجح",
                 "الحالة": "صحيحة",
             },
             {
-                "التاريخ والوقت": "2024-05-23 09:05:12",
+                "التاريخ والوقت": "2026-08-14 09:05:12",
                 "المستخدم": "unknown",
                 "القسم": "تسجيل الدخول",
                 "العملية": "محاولة دخول خاطئة",
@@ -264,7 +233,7 @@ if "tickets" not in st.session_state:
     )
 
 # ==========================================
-# 3. Login / Authentication Interface
+# 3. Login Interface
 # ==========================================
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -295,7 +264,6 @@ if not st.session_state["logged_in"]:
                     st.session_state["current_user"] = username
                     st.session_state["user_role"] = user_match.iloc[0]["الدور"]
 
-                    # Log Login
                     new_log = {
                         "التاريخ والوقت": datetime.datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S"
@@ -314,7 +282,6 @@ if not st.session_state["logged_in"]:
                     )
                     st.rerun()
                 else:
-                    # Log Failed Attempt
                     new_log = {
                         "التاريخ والوقت": datetime.datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S"
@@ -335,7 +302,7 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 # ==========================================
-# 4. Main Navigation (Sidebar Menu)
+# 4. Main Navigation
 # ==========================================
 st.sidebar.markdown(
     """
@@ -367,7 +334,6 @@ st.sidebar.write(
 )
 
 if st.sidebar.button("تسجيل الخروج"):
-    # Log logout
     new_log = {
         "التاريخ والوقت": datetime.datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S"
@@ -384,18 +350,14 @@ if st.sidebar.button("تسجيل الخروج"):
     st.session_state["logged_in"] = False
     st.rerun()
 
-
 # ==========================================
 # 5. Page Implementations
 # ==========================================
 
-# ------------------------------------------
-# 1- Dashboard Section
-# ------------------------------------------
+# 1- Dashboard
 if choice == "لوحة التحكم (الداشبورد)":
     st.markdown("<h2>لوحة التحكم الرئيسية</h2>", unsafe_allow_html=True)
 
-    # Top KPI Cards
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown(
@@ -425,10 +387,9 @@ if choice == "لوحة التحكم (الداشبورد)":
 
     st.markdown("---")
 
-    # Analytics Charts
     c1, c2 = st.columns([2, 1])
     with c1:
-        st.subheader("نظرة عامة على الأداء المالي (الإيرادات، المصروفات، الأرباح)")
+        st.subheader("نظرة عامة على الأداء المالي")
         months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو"]
         df_perf = pd.DataFrame(
             {
@@ -484,7 +445,6 @@ if choice == "لوحة التحكم (الداشبورد)":
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # Tables Summary
     t1, t2 = st.columns(2)
     with t1:
         st.subheader("آخر العقارات المضافة")
@@ -497,13 +457,9 @@ if choice == "لوحة التحكم (الداشبورد)":
             st.session_state["financial_data"], use_container_width=True
         )
 
-
-# ------------------------------------------
-# 2- Users and Access Control Section
-# ------------------------------------------
+# 2- Users & Access Control
 elif choice == "المستخدمين والصلاحيات":
     st.markdown("<h2>إدارة المستخدمين وجلسات الدخول</h2>", unsafe_allow_html=True)
-
     tab1, tab2 = st.tabs(["قائمة المستخدمين وإضافة مستخدم", "سجل الجلسات"])
 
     with tab1:
@@ -556,7 +512,7 @@ elif choice == "المستخدمين والصلاحيات":
             st.rerun()
 
     with tab2:
-        st.subheader("جلسات تسجيل الدخول والأنشطة (IP والوقت)")
+        st.subheader("جلسات تسجيل الدخول والأنشطة")
         st.dataframe(
             st.session_state["users"][
                 [
@@ -570,13 +526,9 @@ elif choice == "المستخدمين والصلاحيات":
             use_container_width=True,
         )
 
-
-# ------------------------------------------
-# 3- Financial Management Section
-# ------------------------------------------
+# 3- Financial Management
 elif choice == "الإدارة المالية":
     st.markdown("<h2>الإدارة المالية والحسابات</h2>", unsafe_allow_html=True)
-
     tab1, tab2, tab3 = st.tabs(
         [
             "حاسبة أجور العمال والموردين",
@@ -602,7 +554,6 @@ elif choice == "الإدارة المالية":
             hours_worked = st.number_input("عدد الساعات المنفذة", min_value=0.0, value=8.0)
             advances = st.number_input("إجمالي السلف المخصومة (ج.م)", min_value=0.0, value=0.0)
 
-        # Calculations
         total_gross = (hours_worked * hourly_rate) * num_workers
         total_net = total_gross - advances
 
@@ -610,6 +561,29 @@ elif choice == "الإدارة المالية":
         st.markdown(f"### **صافي المستحق بعد السلف:** {total_net:,.2f} ج.م")
 
     with tab2:
-        st.subheader("تسجيل الصادرات (الإيرادات) والواردات (المصروفات)")
+        st.subheader("تسجيل الصادرات والواردات")
         with st.form("financial_entry"):
-            c1, c2, c3 = st.
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                f_type = st.selectbox("نوع العملية", ["إيراد", "مصروف", "سلفة"])
+                f_entity = st.text_input("الجهة / اسم الشخص")
+            with c2:
+                f_amount = st.number_input("المبلغ (ج.م)", min_value=0.0)
+                f_dept = st.selectbox(
+                    "القسم التابع له",
+                    ["العقارات", "المشتريات", "الموارد البشرية", "IT", "إداري"],
+                )
+            with c3:
+                f_date = st.date_input("التاريخ")
+                f_status = st.selectbox("الحالة", ["مكتملة", "معلقة"])
+
+            if st.form_submit_button("تسجيل المعاملة المالية"):
+                new_fin = {
+                    "نوع العملية": f_type,
+                    "الجهة": f_entity,
+                    "المبلغ": f_amount,
+                    "التاريخ": str(f_date),
+                    "الحالة": f_status,
+                    "القسم": f_dept,
+                }
+                st.session_state["financial_data"
